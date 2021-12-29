@@ -1,0 +1,40 @@
+<paf_config>
+    
+    <!--Root level directories-->
+    <param name="ROOT" value="~/Projects"/>
+    <param name="ANDROID_DEPLOYMENT_DIR" value="android_deployment"/>
+    
+    <!--Project sub-directories-->
+    <param name="DOWNLOAD_DIR" value="download"/>
+    <param name="SOURCE_DIR" value="source"/>
+    <param name="BUILD_DIR" value="build"/>
+    <param name="PRODUCT_DIR" value="product"/>
+    <param name="DEPLOY_DIR" value="deploy"/>
+    
+    <!--ARM toolchain-->
+    <param name="ARM_TOOLCHAIN_DIR" value="arm_toolchain"/>
+    
+    <!--System architecture parameters-->
+    <param name="ARM_COMPILER" value="arm-linux-gnueabi"/>
+    <param name="ARM64_COMPILER" value="aarch64-linux-gnu"/>
+    <!--Expected values are = ARM and ARM64-->
+    <param name="ARCH_TYPE" value="ARM64"/>
+    
+    <!--U-boot parameters-->
+    <param name="UBOOT_CONFIG_TARGET_ARM" value="vexpress_ca9x4_defconfig"/>
+    <param name="UBOOT_CONFIG_TARGET_ARM64" value="qemu_arm64_defconfig"/>
+    <param name="UBOOT_GIT_REFERENCE" value="git@github.com:u-boot/u-boot.git"/>
+    <param name="UBOOT_FOLDER_NAME" value="u-boot"/>
+    
+    <!--Build system parameters-->
+    <param name="BUILD_SYSTEM_CORES_NUMBER" value="8"/>
+    
+    <phase name="compile_uboot">
+    	<task name="scenarios.general.PrepareDirectories"/>
+        <task name="scenarios.uboot.SyncUBoot"/>
+        <task name="scenarios.arm_toolchain.InstallARMToolchain"/>
+        <task name="scenarios.uboot.ConfigureUBoot"/>
+	<task name="scenarios.uboot.BuildUBoot"/>
+	<task name="scenarios.uboot.DeployUBoot"/>
+    </phase>
+</paf_config>
