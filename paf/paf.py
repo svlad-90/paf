@@ -21,18 +21,16 @@ class CommandOutput:
         self.stdout = ""
         self.stderr = ""
         
-        self.exit_code = stdout.channel.recv_exit_status()
-        
         logging.info(f"Command output:")
         
-        for line in stdout:
+        for line in iter(stdout.readline, ""):
             if line:
                 self.stdout=self.stdout + line
-                
-                if self.exit_code == 0:
-                    logging.info(line.rstrip())
+                logging.info(line.rstrip())
         
         self.stdout = self.stdout.rstrip()
+        
+        self.exit_code = stdout.channel.recv_exit_status()
         
         for line in stderr:
             if line:

@@ -7,6 +7,15 @@ Created on Dec 29, 2021
 from argparse import ArgumentParser
 import re
 
+import logging
+import coloredlogs
+
+logging = logging.getLogger(__name__)
+
+coloredlogs.install(level='INFO', logging = logging,
+                    fmt='%(asctime)s,%(msecs)03d %(levelname)s %(message)s',
+                    milliseconds=True)
+
 from paf import paf
 from paf import common
 
@@ -74,19 +83,27 @@ class ExecutionContext:
         phase = self.__available_phases.get(phase_name)
         if phase:
             for task_name in phase.get_tasks():
+                logging.info(f"Execution context: start execution of the phase '{phase_name}'")
                 self.__execute_task(task_name, environment)
+                logging.info(f"Execution context: execution of the phase '{phase_name}' was finished")
         else:
             raise Exception(f"Phase '{phase_name}' was not found!")
     
     def __execute_scenario(self, scenario_name, environment):
+
         scenario = self.__available_scenarios.get(scenario_name)
         if scenario:
+            logging.info(f"Execution context: start execution of the scenario '{scenario_name}'")
             for phase_name in scenario.get_phases():
                 self.__execute_phase(phase_name, environment)
+            logging.info(f"Execution context: execution of the scenario '{scenario_name}' was finished")
         else:
             raise Exception(f"Phase '{scenario_name}' was not found!")
     
     def execute(self, environment):
+        
+        logging.info(f"Execution context: start execution")
+        
         for element in self.__execution_elements:
             element_type = element.get_element_type()
             if element_type == ExecutionElement.ExecutionElementType_Task:
@@ -98,6 +115,8 @@ class ExecutionContext:
             elif element_type == ExecutionElement.ExecutionElementType_Scenario:
                 scenario_name = element.get_element_name()
                 self.__execute_scenario(scenario_name, environment)
+        
+        logging.info(f"Execution context: finished execution")
 
 def parse_config(config_path, execution_context, environment):
     tree = ET.parse(config_path)
@@ -209,5 +228,7 @@ def main():
                 environment.setVariableValue(splited_parameter[0], splited_parameter[1])
 
     execution_context.execute(environment)
+
+    logging.info(f"Last trace ...")
 
 main()

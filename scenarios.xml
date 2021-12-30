@@ -1,5 +1,4 @@
 <paf_config>
-    
     <!--Root level directories-->
     <param name="ROOT" value="~/Projects"/>
     <param name="ANDROID_DEPLOYMENT_DIR" value="android_deployment"/>
@@ -26,15 +25,34 @@
     <param name="UBOOT_GIT_REFERENCE" value="git@github.com:u-boot/u-boot.git"/>
     <param name="UBOOT_FOLDER_NAME" value="u-boot"/>
     
+    <!--Linux kernel parameters-->
+    <param name="LINUX_KERNEL_FOLDER_NAME" value="linux_kernel"/>
+    
     <!--Build system parameters-->
     <param name="BUILD_SYSTEM_CORES_NUMBER" value="8"/>
     
-    <phase name="compile_uboot">
+    <phase name="prepare_system">
     	<task name="scenarios.general.PrepareDirectories"/>
-        <task name="scenarios.uboot.SyncUBoot"/>
-        <task name="scenarios.arm_toolchain.InstallARMToolchain"/>
-        <task name="scenarios.uboot.ConfigureUBoot"/>
-	<task name="scenarios.uboot.BuildUBoot"/>
-	<task name="scenarios.uboot.DeployUBoot"/>
+    	<task name="scenarios.general.InstallDependencies"/>
     </phase>
+    
+    <phase name="compile_uboot">
+        <task name="scenarios.uboot.SyncUBoot"/>
+        <task name="scenarios.uboot.ConfigureUBoot"/>
+	    <task name="scenarios.uboot.BuildUBoot"/>
+	    <task name="scenarios.uboot.DeployUBoot"/>
+    </phase>
+    
+    <phase name="compile_linux_kernel">
+        <task name="scenarios.linux_kernel.SyncLinuxKernel"/>
+        <task name="scenarios.linux_kernel.ConfigureLinuxKernel"/>
+	    <task name="scenarios.linux_kernel.BuildLinuxKernel"/>
+	    <task name="scenarios.linux_kernel.DeployLinuxKernel"/>
+    </phase>
+    
+    <scenario name="build_boot_image">
+        <phase name="prepare_system"/>
+        <phase name="compile_uboot"/>
+        <phase name="compile_linux_kernel"/>
+    </scenario>
 </paf_config>
