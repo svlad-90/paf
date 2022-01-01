@@ -26,7 +26,8 @@
     <param name="UBOOT_FOLDER_NAME" value="u-boot"/>
     
     <!--Linux kernel parameters-->
-    <param name="LINUX_KERNEL_FOLDER_NAME" value="linux_kernel"/>
+    <param name="LINUX_KERNEL_FOLDER_NAME" value="linux-stable"/>
+    <param name="LINUX_KERNEL_GIT_REFERENCE" value="git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git"/>
     
     <!--Build system parameters-->
     <param name="BUILD_SYSTEM_CORES_NUMBER" value="8"/>

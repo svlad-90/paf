@@ -14,16 +14,14 @@ class SyncUBoot(paf.SSHLocalClient):
     
     def execute(self):
         
-        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${UBOOT_FOLDER_NAME}")
-        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${UBOOT_FOLDER_NAME}")
-        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${UBOOT_FOLDER_NAME}")
-        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${PRODUCT_DIR}/${UBOOT_FOLDER_NAME}")
-        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${UBOOT_FOLDER_NAME}")
+        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}")
+        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}")
+        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}")
+        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${PRODUCT_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}")
+        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}")
         
-        self.ssh_command_must_succeed("(cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR} && " + 
-            "git clone ${UBOOT_GIT_REFERENCE}) || (cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/u-boot && git pull)")
-        
-        self.ssh_command_must_succeed("sudo apt-get -y install libssl-dev")
+        self.ssh_command_must_succeed("(cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE} && " + 
+            "git clone ${UBOOT_GIT_REFERENCE}) || (cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} && git pull)")
 
 class ConfigureUBoot(paf.SSHLocalClient):
 
@@ -47,9 +45,9 @@ class ConfigureUBoot(paf.SSHLocalClient):
         else:
             target = "defconfig"
         
-        self.ssh_command_must_succeed("cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${UBOOT_FOLDER_NAME}; "
-                                      "make O=${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${UBOOT_FOLDER_NAME} "
-                                      "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${UBOOT_FOLDER_NAME} V=1 "
+        self.ssh_command_must_succeed("cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}; "
+                                      "make O=${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} "
+                                      "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} V=1 "
                                       "CROSS_COMPILE=" + used_compiler + "- " + target)
 
 class BuildUBoot(paf.SSHLocalClient):
@@ -67,10 +65,15 @@ class BuildUBoot(paf.SSHLocalClient):
         else:
             raise Exception(f"Not expected arch type '{arch_type}'")
             
-        self.ssh_command_must_succeed("cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${UBOOT_FOLDER_NAME}; "
-                                      "make O=${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${UBOOT_FOLDER_NAME} "
-                                      "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${UBOOT_FOLDER_NAME} V=1 "
+        self.ssh_command_must_succeed("cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}; "
+                                      "make O=${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} "
+                                      "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} V=1 "
                                       "CROSS_COMPILE=" + used_compiler + "- -j${BUILD_SYSTEM_CORES_NUMBER} all")
+        
+        self.ssh_command_must_succeed("cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}; "
+                                      "make O=${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} "
+                                      "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} V=1 "
+                                      "CROSS_COMPILE=" + used_compiler + "- -j${BUILD_SYSTEM_CORES_NUMBER} menuconfig")
 
 class DeployUBoot(paf.SSHLocalClient):
     def __init__(self):
@@ -78,8 +81,8 @@ class DeployUBoot(paf.SSHLocalClient):
         self.set_name(DeployUBoot.__name__)
         
     def execute(self):         
-      self.ssh_command_must_succeed("cp ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${UBOOT_FOLDER_NAME}/u-boot "
-                                    "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${UBOOT_FOLDER_NAME}/")
-      self.ssh_command_must_succeed("cp ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${UBOOT_FOLDER_NAME}/u-boot.bin "
-                                    "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${UBOOT_FOLDER_NAME}/")   
+        self.ssh_command_must_succeed("cp ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}/u-boot "
+            "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}/")
+        self.ssh_command_must_succeed("cp ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}/u-boot.bin "
+            "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}/")   
                 

@@ -16,20 +16,67 @@ coloredlogs.install(level='INFO', logging = logging,
                     fmt='%(asctime)s,%(msecs)03d %(levelname)s %(message)s',
                     milliseconds=True)
 
+import termios
+import tty
+import sys
+
+from paf import common
+
 class CommandOutput:
-    def __init__(self, stdout, stderr):
+    def __init__(self, stdin, stdout, stderr):
         self.stdout = ""
         self.stderr = ""
         
         logging.info(f"Command output:")
         
-        for line in iter(stdout.readline, ""):
-            if line:
-                self.stdout=self.stdout + line
-                logging.info(line.rstrip())
+        chan = stdin.channel
         
-        self.stdout = self.stdout.rstrip()
-        
+        import select
+
+        # Interactive shell
+        oldtty = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            tty.setcbreak(sys.stdin.fileno())
+    
+            while True:
+                r, w, e = select.select([chan, sys.stdin], [], [])
+                if chan in r:
+                    
+                    if chan.recv_ready(): 
+                        nbytes=len(stdout.channel.in_buffer)
+                            
+                        if nbytes > 0:       
+                            if chan.recv_ready():
+                                    output = stdout.readline(nbytes)
+                                    
+                                    if output and output != "":
+                                        self.stdout=self.stdout + output
+                                        sys.stdout.write(output)
+                                        sys.stdout.flush()
+                            
+                            if chan.recv_stderr_ready():
+                                error = stderr.readline(nbytes)
+                                
+                                if error and error != "":
+                                    self.stderr=self.stderr + error
+                                    logging.error(error.rstrip("\n"))
+                            
+                    if chan.exit_status_ready():
+                        sys.stdout.write("\r\n")
+                        break
+                    
+                if sys.stdin in r:
+                    bytes_to_read = common.bytes_to_read(sys.stdin)
+                    x = sys.stdin.read(bytes_to_read)
+                    if len(x) == 0:
+                        break
+                    stdin.write(x)
+                    stdin.flush()
+                    
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+                
         self.exit_code = stdout.channel.recv_exit_status()
         
         for line in stderr:
@@ -37,9 +84,7 @@ class CommandOutput:
                 self.stderr=self.stderr + line
                 
                 if self.exit_code != 0:
-                    logging.error(line.rstrip())
-                    
-        self.stderr = self.stderr.rstrip()
+                    logging.error(line.rstrip("\n"))
 
 class SSHConnection:
     def __init__(self, host, user, port = 22, password = "", key_filename = ""):
@@ -81,9 +126,9 @@ class SSHConnection:
             logging.info(f"{result_cmd}")
         
         if True == self.__connected:
-            stdin, stdout, stderr = self.__client.exec_command(result_cmd, timeout)
+            stdin, stdout, stderr = self.__client.exec_command(result_cmd, timeout, get_pty=True)
             
-            result = CommandOutput(stdout, stderr)
+            result = CommandOutput(stdin, stdout, stderr)
             
             if result.exit_code == 0:
                 logging.info(f"Command was successfully executed. Returned result code is '{result.exit_code}'")

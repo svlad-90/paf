@@ -14,6 +14,8 @@ class PrepareDirectories(paf.SSHLocalClient):
     
     def execute(self):
         
+        self.ssh_command_must_succeed("echo '123'")
+        
         if self.get_environment_param("CLEAR") == "True":
             self.ssh_command_must_succeed("rm -rf ${ROOT}/${ANDROID_DEPLOYMENT_DIR}")
         
