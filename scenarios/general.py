@@ -6,11 +6,44 @@ Created on Dec 29, 2021
 
 from paf import paf
 
-class PrepareDirectories(paf.SSHLocalClient):
+class LinuxDeploymentTask(paf.SSHLocalClient):
+    
+    def _get_arch_type(self):
+        return self.get_environment_param("ARCH_TYPE")
+    
+    def _get_target(self):
+        target = ""
+        
+        arch_type = self._get_arch_type()
+        
+        if(arch_type == "ARM"):
+            target = "${UBOOT_CONFIG_TARGET_ARM}"
+        elif(arch_type == "ARM64"):
+            target = "${UBOOT_CONFIG_TARGET_ARM64}"
+        else:
+            target = "defconfig"
+
+        return target
+
+    def _get_compiler(self):
+        compiler = ""
+        
+        arch_type = self._get_arch_type()
+        
+        if(arch_type == "ARM"):
+            compiler = "${ARM_COMPILER}"
+        elif(arch_type == "ARM64"):
+            compiler = "${ARM64_COMPILER}"
+        else:
+            raise Exception("Impossible to determine compiler!")
+
+        return compiler
+
+class prepare_directories(LinuxDeploymentTask):
     
     def __init__(self):
         super().__init__()
-        self.set_name(PrepareDirectories.__name__)
+        self.set_name(prepare_directories.__name__)
     
     def execute(self):
         
@@ -27,11 +60,11 @@ class PrepareDirectories(paf.SSHLocalClient):
         self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${PRODUCT_DIR}")
         self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}")
 
-class InstallDependencies(paf.SSHLocalClient):
+class install_dependencies(LinuxDeploymentTask):
     
     def __init__(self):
         super().__init__()
-        self.set_name(InstallDependencies.__name__)
+        self.set_name(install_dependencies.__name__)
     
     def execute(self):
         
@@ -44,6 +77,5 @@ class InstallDependencies(paf.SSHLocalClient):
         elif(arch_type == "ARM64"):
             used_compiler = "${ARM64_COMPILER}"
             
-        self.ssh_command_must_succeed("sudo apt-get -y install gcc-" + used_compiler)
+        self.ssh_command_must_succeed("sudo apt-get -y install gcc-" + used_compiler + " libssl-dev qemu-system-arm")
         
-        self.ssh_command_must_succeed("sudo apt-get -y install libssl-dev")

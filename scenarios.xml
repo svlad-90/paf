@@ -21,6 +21,8 @@
     
     <!--U-boot parameters-->
     <param name="UBOOT_CONFIG_TARGET_ARM" value="vexpress_ca9x4_defconfig"/>
+    <param name="UBOOT_ARM_MACHINE_TYPE" value="vexpress-a9"/>
+    <param name="UBOOT_ARM64_MACHINE_TYPE" value="virt"/>
     <param name="UBOOT_CONFIG_TARGET_ARM64" value="qemu_arm64_defconfig"/>
     <param name="UBOOT_GIT_REFERENCE" value="git@github.com:u-boot/u-boot.git"/>
     <param name="UBOOT_FOLDER_NAME" value="u-boot"/>
@@ -32,28 +34,37 @@
     <!--Build system parameters-->
     <param name="BUILD_SYSTEM_CORES_NUMBER" value="8"/>
     
-    <phase name="prepare_system">
-    	<task name="scenarios.general.PrepareDirectories"/>
-    	<task name="scenarios.general.InstallDependencies"/>
+    <phase name="system_prepare">
+    	<task name="scenarios.general.prepare_directories"/>
+    	<task name="scenarios.general.install_dependencies"/>
     </phase>
     
-    <phase name="compile_uboot">
-        <task name="scenarios.uboot.SyncUBoot"/>
-        <task name="scenarios.uboot.ConfigureUBoot"/>
-	    <task name="scenarios.uboot.BuildUBoot"/>
-	    <task name="scenarios.uboot.DeployUBoot"/>
+    <phase name="uboot_deploy">
+        <task name="scenarios.uboot.uboot_sync"/>
+        <task name="scenarios.uboot.uboot_clean">
+        	<condition name="UBOOT_CLEAN" value="True"/>
+        </task>
+        <task name="scenarios.uboot.uboot_configure"/>
+	    <task name="scenarios.uboot.uboot_build"/>
+	    <task name="scenarios.uboot.uboot_deploy"/>
+	    <task name="scenarios.uboot.uboot_run">
+	    	<condition name="UBOOT_RUN" value="True"/>
+	    </task>
     </phase>
     
-    <phase name="compile_linux_kernel">
-        <task name="scenarios.linux_kernel.SyncLinuxKernel"/>
-        <task name="scenarios.linux_kernel.ConfigureLinuxKernel"/>
-	    <task name="scenarios.linux_kernel.BuildLinuxKernel"/>
-	    <task name="scenarios.linux_kernel.DeployLinuxKernel"/>
+    <phase name="linux_kernel_deploy">
+        <task name="scenarios.linux_kernel.linux_kernel_sync"/>
+        <task name="scenarios.linux_kernel.linux_kernel_clean">
+        	<condition name="LINUX_KERNEL_CLEAN" value="True"/>
+        </task>
+        <task name="scenarios.linux_kernel.linux_kernel_configure"/>
+	    <task name="scenarios.linux_kernel.linux_kernel_build"/>
+	    <task name="scenarios.linux_kernel.linux_kernel_deploy"/>
     </phase>
     
-    <scenario name="build_boot_image">
-        <phase name="prepare_system"/>
-        <phase name="compile_uboot"/>
-        <phase name="compile_linux_kernel"/>
+    <scenario name="boot_image_deploy">
+        <phase name="system_prepare"/>
+        <phase name="uboot_deploy"/>
+        <phase name="linux_kernel_deploy"/>
     </scenario>
 </paf_config>

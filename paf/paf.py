@@ -63,7 +63,7 @@ class CommandOutput:
                                     logging.error(error.rstrip("\n"))
                             
                     if chan.exit_status_ready():
-                        sys.stdout.write("\r\n")
+                        #sys.stdout.write("\r\n")
                         break
                     
                 if sys.stdin in r:
