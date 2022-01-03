@@ -10,20 +10,6 @@ class LinuxDeploymentTask(paf.SSHLocalClient):
     
     def _get_arch_type(self):
         return self.get_environment_param("ARCH_TYPE")
-    
-    def _get_target(self):
-        target = ""
-        
-        arch_type = self._get_arch_type()
-        
-        if(arch_type == "ARM"):
-            target = "${UBOOT_CONFIG_TARGET_ARM}"
-        elif(arch_type == "ARM64"):
-            target = "${UBOOT_CONFIG_TARGET_ARM64}"
-        else:
-            target = "defconfig"
-
-        return target
 
     def _get_compiler(self):
         compiler = ""

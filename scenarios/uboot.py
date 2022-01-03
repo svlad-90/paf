@@ -6,7 +6,22 @@ Created on Dec 29, 2021
 
 from scenarios import general
 
-class uboot_sync(general.LinuxDeploymentTask):
+class UbootDeploymentTask(general.LinuxDeploymentTask):
+    def _get_uboot_config_target(self):
+        target = ""
+        
+        arch_type = self._get_arch_type()
+        
+        if(arch_type == "ARM"):
+            target = "${UBOOT_CONFIG_TARGET_ARM}"
+        elif(arch_type == "ARM64"):
+            target = "${UBOOT_CONFIG_TARGET_ARM64}"
+        else:
+            raise Exception(f"Can't determine config target for architecture '${arch_type}'")
+
+        return target
+
+class uboot_sync(UbootDeploymentTask):
     
     def __init__(self):
         super().__init__()
@@ -23,7 +38,7 @@ class uboot_sync(general.LinuxDeploymentTask):
         self.ssh_command_must_succeed("(cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE} && " + 
             "git clone ${UBOOT_GIT_REFERENCE}) || (cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} && git pull)")
 
-class uboot_clean(general.LinuxDeploymentTask):
+class uboot_clean(UbootDeploymentTask):
     
     def __init__(self):
         super().__init__()
@@ -37,7 +52,7 @@ class uboot_clean(general.LinuxDeploymentTask):
                                       "distclean")
 
 
-class uboot_configure(general.LinuxDeploymentTask):
+class uboot_configure(UbootDeploymentTask):
 
     def __init__(self):
         super().__init__()
@@ -46,14 +61,14 @@ class uboot_configure(general.LinuxDeploymentTask):
     def execute(self):
         
         used_compiler = self._get_compiler()
-        target = self._get_target()
+        target = self._get_uboot_config_target()
         
         self.ssh_command_must_succeed("cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}; "
                                       "make O=${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} "
                                       "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} V=1 "
                                       "CROSS_COMPILE=" + used_compiler + "- " + target)
 
-class uboot_build(general.LinuxDeploymentTask):
+class uboot_build(UbootDeploymentTask):
     def __init__(self):
         super().__init__()
         self.set_name(uboot_build.__name__)
@@ -72,7 +87,7 @@ class uboot_build(general.LinuxDeploymentTask):
                                       "-C ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME} V=1 "
                                       "CROSS_COMPILE=" + used_compiler + "- -j${BUILD_SYSTEM_CORES_NUMBER} menuconfig")
 
-class uboot_deploy(general.LinuxDeploymentTask):
+class uboot_deploy(UbootDeploymentTask):
     def __init__(self):
         super().__init__()
         self.set_name(uboot_deploy.__name__)
@@ -83,7 +98,7 @@ class uboot_deploy(general.LinuxDeploymentTask):
         self.ssh_command_must_succeed("cp ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}/u-boot.bin "
             "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${UBOOT_FOLDER_NAME}/")
 
-class uboot_run(general.LinuxDeploymentTask):
+class uboot_run(UbootDeploymentTask):
     def __init__(self):
         super().__init__()
         self.set_name(uboot_run.__name__)
