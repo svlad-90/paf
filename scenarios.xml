@@ -7,7 +7,6 @@
     <param name="DOWNLOAD_DIR" value="download"/>
     <param name="SOURCE_DIR" value="source"/>
     <param name="BUILD_DIR" value="build"/>
-    <param name="PRODUCT_DIR" value="product"/>
     <param name="DEPLOY_DIR" value="deploy"/>
     
     <!--ARM toolchain-->

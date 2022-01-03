@@ -39,7 +39,6 @@ class linux_kernel_sync(LinuxKernelDeploymentTask):
         self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}")
         self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}")
         self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}")
-        self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${PRODUCT_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}")
         self.ssh_command_must_succeed("mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}")
         
         self.ssh_command_must_succeed("(cd ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE} && " + 
@@ -150,6 +149,21 @@ class linux_kernel_deploy(LinuxKernelDeploymentTask):
         super().__init__()
         self.set_name(linux_kernel_deploy.__name__)
         
-    def execute(self):         
-        pass
+    def execute(self):
+        
+        self.ssh_command_must_succeed("rm -rf ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME};"
+            "mkdir -p ${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME};")
+
+        products_folder = "arch/" + self._get_arch_type().lower() + "/boot"
+
+        path_prefix = "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}"
+
+        files_list: list = [
+            os.path.join( path_prefix, products_folder, "Image" ),
+            os.path.join( path_prefix, products_folder, "zImage" ),
+            os.path.join( path_prefix, products_folder, "Image.gz" ),
+            os.path.join( path_prefix, products_folder, "compressed/vmlinux" ) ]
+
+        for file in files_list:
+            self.ssh_command_must_succeed(f"cp {file} " + "${ROOT}/${ANDROID_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}/ || :")
                 
