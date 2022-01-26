@@ -4,8 +4,6 @@
 
 This page is the example automation project, which was made with paf automation framework.
 
-Root of this project is located [here](https://github.com/svlad-90/paf/tree/main/paf/linux_deployment)
-
 Visit [scenarios.xml](./scenarios.xml) to look at the declared phases, scenarios and parameters.
 
 Visit [general.py](./general.py), [uboot.py](./uboot.py), [busybox.py](./busybox.py), [linux_kernel.py](./linux_kernel.py) to find implementation of specific tasks.

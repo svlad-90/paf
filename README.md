@@ -359,7 +359,7 @@ python ./paf/paf_main.py -imd ./paf/my_scenarios -c ./paf/my_scenarios/scenarios
 
 ## More examples
 
-You can find the example automation project at the [following page](./linux_deployment/README.md)
+You can find the example automation project at the [following page](./linux_deployment)
 
 ----
 
