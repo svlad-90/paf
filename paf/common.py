@@ -4,21 +4,15 @@ Created on Dec 28, 2021
 @author: vladyslav_goncharuk
 '''
 
-import importlib
-
 import os
 import io
+import sys
+import fcntl
+import struct
+import termios
+import glob
+import imp
 
-if os.name == 'nt':
-    import msvcrt
-    from ctypes import Structure, c_ushort, windll, POINTER, byref
-    from ctypes.wintypes import HANDLE, _COORD, _SMALL_RECT
-else:
-    import fcntl
-    import struct
-    import termios
-    import tty
-   
 def has_fileno(stream):
     """
     Cleanly determine whether ``stream`` has a useful ``.fileno()``.
@@ -64,7 +58,7 @@ def isatty(stream):
     # If we got here, none of the above worked, so it's reasonable to assume
     # the darn thing isn't a real TTY.
     return False
-    
+
 def bytes_to_read(input_):
     """
     Query stream ``input_`` to see how many bytes may be readable.
@@ -84,10 +78,95 @@ def bytes_to_read(input_):
         return struct.unpack("h", fionread)[0]
     return 1
 
-def create_class_instance(full_class_name):
+def load_module(absolute_path):
+
+    print(f"Attempt to load module - {absolute_path}")
+
+    import importlib.util
+    module_name, _ = os.path.splitext(os.path.split(absolute_path)[-1])
     try:
-        module_path, class_name = full_class_name.rsplit('.', 1)
-        module = importlib.import_module(module_path)
-        return getattr(module, class_name)
-    except (ImportError, AttributeError) as e:
-        raise ImportError(full_class_name)
+        py_mod = imp.load_source(module_name, absolute_path)
+    except ImportError as e:
+        if "No module named" not in e.msg:
+            raise e
+
+        missing_module = e.name
+        module_root = os.path.dirname(absolute_path)
+
+        if missing_module + ".py" not in os.listdir(module_root):
+            msg = "Could not find '{}' in '{}'"
+            raise ImportError(msg.format(missing_module, module_root))
+
+        print("Could not directly load module, including dir: {}".format(module_root))
+        sys.path.append(module_root)
+        spec = importlib.util.spec_from_file_location(module_name, absolute_path)
+        py_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(py_mod)
+    return module_name, py_mod
+
+def load_all_modules_in_dir(module_root_dir):
+
+    if not os.path.isdir(module_root_dir):
+        raise Exception(f"Provided path '{module_root_dir}' is not a directory!")
+
+    found_python_files = glob.glob(f"{module_root_dir}/*.py")
+
+    result = {}
+
+    for found_python_file in found_python_files:
+        if os.path.isfile(found_python_file) and not found_python_file.endswith('__init__.py'):
+            loaded_module_name, loaded_module = load_module(found_python_file)
+
+            if loaded_module:
+                result[loaded_module_name] = loaded_module
+
+    return result
+
+def load_all_modules_in_dirs(module_paths):
+    result = {}
+    for module_path in module_paths:
+        result.update(load_all_modules_in_dir(module_path))
+    return result
+
+def create_class_instance(full_class_name, loaded_modules):
+    _, module_name, class_name = full_class_name.rsplit('.', 2)
+    module = loaded_modules.get(module_name)
+
+    result = None
+
+    if module:
+        result = getattr(module, class_name)
+    else:
+        raise Exception(f"Module '{module_name}' is not loaded.")
+
+    return result
+
+def get_terminal_dimensions():
+    if isatty(sys.stdout):
+        s = struct.pack('HHHH', 0, 0, 0, 0)
+        t = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, s)
+        winsize = struct.unpack('hhhh', t)
+        return winsize[1], winsize[0]
+    else:
+        return None, None
+
+def exec_command(
+        paramiko_ssh_client,
+        command,
+        bufsize=-1,
+        timeout=None,
+        environment=None,
+        terminal_width = 80,
+        terminal_height = 24
+    ):
+    chan = paramiko_ssh_client._transport.open_session(timeout=timeout)
+    if isatty(sys.stdout):
+        chan.get_pty(width=terminal_width, height=terminal_height)
+    chan.settimeout(timeout)
+    if environment:
+        chan.update_environment(environment)
+    chan.exec_command(command)
+    stdin = chan.makefile_stdin("wb", bufsize)
+    stdout = chan.makefile("r", bufsize)
+    stderr = chan.makefile_stderr("r", bufsize)
+    return stdin, stdout, stderr
