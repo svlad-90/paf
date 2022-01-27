@@ -3,6 +3,7 @@
 ## Table of content
 
 - [What is PAF?](#what-is-paf)
+- [External dependencies](#external-dependencies)
 - [PAF workflow](#paf-workflow)
 - [How to declare the task?](#how-to-declare-the-task)
 - [The content of the xml configuration file](#the-content-of-the-xml-configuration-file)
@@ -17,6 +18,22 @@
 ## What is PAF?
 
 PAF stands for the "Python automation framework". It is a rather tiny tool, which allows you to create and run your automation scenarios.
+
+----
+
+## External dependencies
+
+PAF framework relies on python3.
+
+On top of that it requires one single external library - [coloredlogs](https://github.com/xolox/python-coloredlogs)
+
+In order to install the coloredlogs library, just execute the following command:
+
+```bash
+pip install coloredlogs
+```
+
+That should be enough to proceed.
 
 ----
 
