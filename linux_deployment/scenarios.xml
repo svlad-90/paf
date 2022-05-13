@@ -1,4 +1,13 @@
 <paf_config>
+
+    <!--Predefined PAF parameters for connection to the local system-->
+    <!--They are used only if you are using the SSHLocalCLient class.-->
+    <param name="LOCAL_HOST_IP_ADDRESS" value="127.0.0.1"/>
+    <param name="LOCAL_HOST_USER_NAME" value="vladyslav_goncharuk"/>
+    <param name="LOCAL_HOST_SYSTEM_SSH_KEY" value="/home/vladyslav_goncharuk/.ssh/id_rsa"/>
+    <!-- Better not to use password parameter. Use RSA instead. Still, it is supported. -->
+    <!-- <param name="LOCAL_HOST_SYSTEM_PASSWORD" value="xyz"/> -->
+
     <!--Root level directories-->
     <param name="ROOT" value="~/Projects"/>
     <param name="LINUX_DEPLOYMENT_DIR" value="linux_deployment"/>
