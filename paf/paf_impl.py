@@ -767,6 +767,14 @@ class Task:
         self.__environment = environment
         self.__dict__.update(self.__environment.getVariables())
 
+    def fail(self, reason):
+        logger.error(f"Failure due to: '" + reason + "'")
+        raise Exception(reason)
+
+    def assertion(self, condition, message):
+        if not condition:
+            self.fail(message)
+
     # Helper bash commands
     def _get_create_file_marker_command(self, file_path, file_content):
         return "echo " + f"\"{file_content}\"" + " > " + f"{file_path}"
