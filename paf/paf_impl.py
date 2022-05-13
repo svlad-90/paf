@@ -702,15 +702,15 @@ class Task:
                         exec_mode = ExecutionMode.INTERACTIVE,
                         communication_mode = CommunicationMode.USE_PTY):
         process = Subprocess()
-        command_output = process.subprocess_must_succeed(cmd,
-                                                         timeout,
-                                                         substitute_params,
-                                                         shell = shell,
-                                                         exec_mode = exec_mode,
-                                                         master_fd = Task.__master_fd,
-                                                         slave_fd = Task.__slave_fd,
-                                                         communication_mode = communication_mode,
-                                                         params = self.__dict__)
+        command_output = process.exec_subprocess(cmd,
+                                                 timeout,
+                                                 substitute_params,
+                                                 shell = shell,
+                                                 exec_mode = exec_mode,
+                                                 master_fd = Task.__master_fd,
+                                                 slave_fd = Task.__slave_fd,
+                                                 communication_mode = communication_mode,
+                                                 params = self.__dict__)
 
         return command_output
 
