@@ -25,13 +25,37 @@ PAF stands for the "Python automation framework". It is a rather tiny tool, whic
 
 PAF framework relies on python3.
 
-On top of that it requires one single external library - [coloredlogs](https://github.com/xolox/python-coloredlogs)
+On top of that it requires the following set of external python modules:
 
-In order to install the coloredlogs library, just execute the following command:
+|Module link|Version|
+|---|---|
+|[coloredlogs](https://github.com/xolox/python-coloredlogs)|15.0.1+|
+|[paramiko](https://docs.paramiko.org/en/stable/)|2.6.0+|
 
-```bash
-pip install coloredlogs
-```
+The same list of dependencies can be found [here](./Pipfile). Check the packages section.
+
+In order to install the dependencies, you can choose one of the following ways:
+
+- Install dependencies on your local system:
+
+  ```bash
+  pip install coloredlogs
+  pip install paramiko
+  ```
+
+  The benefit of this option is that you will not need t to execute any additional commands on your system before running PAF. The con is that your system will need to have all the mentioned dependencies on it.
+
+- Set up the virtual environment:
+
+  ```bash
+  sudo apt-get install -y pipenv
+  cd <this_repo_root>
+  pipenv install
+  pipenv shell
+  ... use the tool ...
+  ```
+
+  The benefit of this option is that your system will not have any additional python modules being installed on it. The con is that you will need to call "pipenv shell" from the root folder of this repository before running any PAF commands.
 
 That should be enough to proceed.
 
