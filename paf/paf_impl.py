@@ -143,6 +143,8 @@ class SSHCommandOutput:
                 tty.setraw(sys.stdin.fileno())
                 tty.setcbreak(sys.stdin.fileno())
 
+            log_to_file_cache = ""
+
             while True:
                 try:
                     r, w, e = select.select([chan, sys.stdin], [], [])
@@ -171,7 +173,12 @@ class SSHCommandOutput:
 
                                     if logger.log_to_file():
                                         if decoded_output and decoded_output != "":
-                                            logger.non_formatted_info_to_file(decoded_output.rstrip("\n"))
+                                            if "\n" in decoded_output:
+                                                log_to_file_cache = log_to_file_cache + decoded_output
+                                                logger.non_formatted_info_to_file(log_to_file_cache.rstrip("\n"))
+                                                log_to_file_cache = ""
+                                            else:
+                                                log_to_file_cache = log_to_file_cache + decoded_output
 
                                     if exec_mode == ExecutionMode.COLLECT_DATA:
                                         if decoded_output and decoded_output != "":
@@ -190,7 +197,12 @@ class SSHCommandOutput:
                                         stripped_error = decoded_error.rstrip("\n")
 
                                         if logger.log_to_file():
-                                            logger.non_formatted_error_to_file(stripped_error)
+                                            if "\n" in decoded_error:
+                                                log_to_file_cache = log_to_file_cache + stripped_error
+                                                logger.non_formatted_info_to_file(log_to_file_cache)
+                                                log_to_file_cache = ""
+                                            else:
+                                                log_to_file_cache = log_to_file_cache + decoded_error
 
                                         logger.error(stripped_error)
 
@@ -349,6 +361,8 @@ class SubprocessCommandOutput:
 
             if communication_mode == CommunicationMode.USE_PTY:
 
+                log_to_file_cache = ""
+
                 while True:
 
                     try:
@@ -373,7 +387,12 @@ class SubprocessCommandOutput:
 
                             if logger.log_to_file():
                                 if decoded_output and decoded_output != "":
-                                    logger.non_formatted_info_to_file(decoded_output.rstrip("\n"))
+                                    if "\n" in decoded_output:
+                                        log_to_file_cache = log_to_file_cache + decoded_output
+                                        logger.non_formatted_info_to_file(log_to_file_cache.rstrip("\n"))
+                                        log_to_file_cache = ""
+                                    else:
+                                        log_to_file_cache = log_to_file_cache + decoded_output
 
                             if exec_mode == ExecutionMode.COLLECT_DATA:
                                 if decoded_output and decoded_output != "":
@@ -395,6 +414,8 @@ class SubprocessCommandOutput:
                         break
 
             elif communication_mode == CommunicationMode.PIPE_OUTPUT:
+
+                log_to_file_cache = ""
 
                 while True:
 
@@ -422,7 +443,12 @@ class SubprocessCommandOutput:
 
                             if logger.log_to_file():
                                 if decoded_output and decoded_output != "":
-                                    logger.non_formatted_info_to_file(decoded_output.rstrip("\n"))
+                                    if "\n" in decoded_output:
+                                        log_to_file_cache = log_to_file_cache + decoded_output
+                                        logger.non_formatted_info_to_file(log_to_file_cache.rstrip("\n"))
+                                        log_to_file_cache = ""
+                                    else:
+                                        log_to_file_cache = log_to_file_cache + decoded_output
 
                             if exec_mode == ExecutionMode.COLLECT_DATA:
                                 if decoded_output and decoded_output != "":
@@ -445,7 +471,12 @@ class SubprocessCommandOutput:
 
                             if logger.log_to_file():
                                 if decoded_error and decoded_error != "":
-                                    logger.non_formatted_error_to_file(decoded_error.rstrip("\n"))
+                                    if "\n" in decoded_error:
+                                        log_to_file_cache = log_to_file_cache + decoded_error
+                                        logger.non_formatted_info_to_file(log_to_file_cache.rstrip("\n"))
+                                        log_to_file_cache = ""
+                                    else:
+                                        log_to_file_cache = log_to_file_cache + decoded_error
 
                             if exec_mode == ExecutionMode.COLLECT_DATA:
                                 if decoded_error and decoded_error != "":
