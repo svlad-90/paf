@@ -269,6 +269,8 @@ class SSHConnection:
 
         if True == substitute_params:
             unescaped_cmd = re.sub(r'\$\$', '$', cmd)
+            unescaped_cmd = re.sub(r'\{\{', '{', cmd)
+            unescaped_cmd = re.sub(r'\}\}', '}', cmd)
 
         logger.info(f"{unescaped_cmd}")
 
@@ -549,6 +551,8 @@ class Subprocess:
 
         if True == substitute_params:
             unescaped_cmd = re.sub(r'\$\$', '$', cmd)
+            unescaped_cmd = re.sub(r'\{\{', '{', cmd)
+            unescaped_cmd = re.sub(r'\}\}', '}', cmd)
 
         logger.info(f"{unescaped_cmd}")
 
@@ -685,6 +689,10 @@ class Task:
 
     def execute(self):
         pass
+
+    def substitute_parameters(self, cmd):
+        template = Template(cmd)
+        return template.substitute(self.__dict__)
 
     def start(self):
 
