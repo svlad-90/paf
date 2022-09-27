@@ -65,7 +65,7 @@ That should be enough to proceed.
 
 1. Place the root paf folder, which contains the framework's implementation, anywhere you want
 2. Create a folder inside the root "./paf" folder, which will contain your developed automation scripts. Let's call it "my_scenarios".
-3. Create any number of "*.py" files inside "./paf/my_scenarios/" folder, which will contain your automation scripts. You can create any number of python modules. They all will be dynamically loaded. Still, do not create a complex structure with sub-folders, as such a case is not supported yet.
+3. Create any number of "*.py" files inside "./paf/my_scenarios/" folder, which will contain your automation scripts. You can create any number of python modules.
 4. Develop your automation scripts, using the "./paf/paf/paf_impl.py" module. Import it to your scrips and develop the tasks. More information on how to do it is [located here](#how-to-declare-the-task)
 5. Create xml file with any name in any location, which will contain parameters and declaration of scenarios and phases. Let's call it scenarios.xml and place it inside the "./paf/my_scenarios/scenarios.xml" folder.
 6. Fill in the file with the content. More information on how to do it is [located here](#the-content-of-the-xml-configuration-file)
@@ -387,7 +387,7 @@ Currently, the tool supports the following set of command line options:
 |-ph, --phase|Phase to be executed|Multiple|
 |-c, --config|Apply this XML configuration file|Multiple|
 |-p, --parameter|Add parameter to the execution context|Multiple|
-|-imd, --import_module_dir|Load all python modules from the specified directory|Multiple|
+|-imd, --import_module_dir|Load all python modules from the specified directory recursively. Also adds specified directories to the sys.path|Multiple|
 |-ld, --log-dir|Store the output to the specified directory|Last win|
 
 The typical command to execute PAF scenario would be:

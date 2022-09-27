@@ -15,13 +15,26 @@ class BusyboxDeploymentTask(general.LinuxDeploymentTask):
     def __init__(self):
         super().__init__()
 
-        self.DOWNLOAD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${ARCH_TYPE}/${BUSYBOX_FOLDER_NAME}"
-        self.SOURCE_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/${BUSYBOX_FOLDER_NAME}"
-        self.BUILD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/${BUSYBOX_FOLDER_NAME}"
-        self.DEPLOY_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${BUSYBOX_FOLDER_NAME}"
-        self.ROOTFS_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${BUSYBOX_FOLDER_NAME}/initramfs"
-        self.LINUX_KERNEL_IMAGE_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}"
-        self.LINUX_KERNEL_DTB_LOCATION_ARM_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/${LINUX_KERNEL_FOLDER_NAME}/${LINUX_KERNEL_DTB_LOCATION_ARM}"
+        self.DOWNLOAD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${ARCH_TYPE}/" + general.BUSYBOX_FOLDER_PREFIX + "${BUSYBOX_VERSION}"
+        self.SOURCE_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/" + general.BUSYBOX_FOLDER_PREFIX + "${BUSYBOX_VERSION}"
+        self.BUILD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/" + general.BUSYBOX_FOLDER_PREFIX + "${BUSYBOX_VERSION}"
+        self.DEPLOY_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/" + general.BUSYBOX_FOLDER_PREFIX + "${BUSYBOX_VERSION}"
+        self.ROOTFS_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/" + general.BUSYBOX_FOLDER_PREFIX + "${BUSYBOX_VERSION}/initramfs"
+
+    def _get_busybox_config_target(self):
+        target = ""
+
+        arch_type = self._get_arch_type()
+
+        if(arch_type == "ARM"):
+            target = "defconfig"
+        elif(arch_type == "ARM64" or arch_type == "AARCH64"):
+            target = "defconfig"
+        else:
+            target = "defconfig"
+
+        return target
+
 
 class busybox_sync(BusyboxDeploymentTask):
 
@@ -71,9 +84,10 @@ class busybox_configure(BusyboxDeploymentTask):
         arch_type = self._get_arch_type()
         used_compiler = self._get_compiler()
 
-        self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" + arch_type.lower() +
-            " CROSS_COMPILE=" + used_compiler + "- ${BUSYBOX_CONFIG_TARGET}",
-            communication_mode = CommunicationMode.PIPE_OUTPUT)
+        if not self.has_environment_true_param("BUSYBOX_CONFIG_ADJUSTMENT_MODE"):
+            self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" + arch_type.lower() +
+                " CROSS_COMPILE=" + used_compiler + "- " + self._get_busybox_config_target(),
+                communication_mode = CommunicationMode.PIPE_OUTPUT)
 
         config_flags_raw = self.get_environment().getVariableValue("BUSYBOX_CONFIG_FLAGS")
 
@@ -119,7 +133,7 @@ class busybox_build(BusyboxDeploymentTask):
         used_compiler = self._get_compiler()
 
         self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" + arch_type.lower() +
-            " CROSS_COMPILE=" + used_compiler + "- -j${BUILD_SYSTEM_CORES_NUMBER} ${BUSYBOX_BUILD_TARGET}",
+            " CROSS_COMPILE=" + used_compiler + "- -j${BUILD_SYSTEM_CORES_NUMBER} all",
             communication_mode = CommunicationMode.PIPE_OUTPUT)
 
         self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" + arch_type.lower() +
@@ -157,26 +171,56 @@ class busybox_deploy(BusyboxDeploymentTask):
 
         self.subprocess_must_succeed(f"gzip -k {self.DEPLOY_PATH}/initramfs.cpio")
 
-class busybox_run_on_qemu(BusyboxDeploymentTask):
+class busybox_run(BusyboxDeploymentTask):
     def __init__(self):
         super().__init__()
-        self.set_name(busybox_run_on_qemu.__name__)
+        self.set_name(busybox_run.__name__)
 
     def execute(self):
-        arch_type = self._get_arch_type()
+        arch_type = self._get_arch_type().lower()
 
-        if arch_type == "ARM":
-            self.subprocess_must_succeed("qemu-system-arm -machine ${ARM_MACHINE_TYPE} "
-                "-nographic -smp 2 -m 1024M -dtb " + f"{self.LINUX_KERNEL_DTB_LOCATION_ARM_PATH} "
-                "-kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + "/zImage "
-                f"-initrd {self.DEPLOY_PATH}/initramfs.cpio "
-                "-append \"root=/dev/ram rw rdinit=/bin/sh console=ttyAMA0\"")
-        elif arch_type == "ARM64":
-            self.subprocess_must_succeed("qemu-system-aarch64 -machine ${ARM64_MACHINE_TYPE} -cpu cortex-a57 -machine type=${ARM64_MACHINE_TYPE} "
-                "-nographic -smp 2 -m 1024M "
-                f"-kernel {self.LINUX_KERNEL_IMAGE_PATH}/Image "
-                f"-initrd {self.DEPLOY_PATH}/initramfs.cpio "
-                "-append \"root=/dev/ram rw rdinit=/bin/sh console=ttyAMA0\"")
+        command: str = ""
+
+        if self.has_non_empty_environment_param("QEMU_CONFIG"):
+            command += " " + self.get_environment_param("QEMU_CONFIG")
+
+            if "arm" == arch_type:
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/zImage"
+                command += f" -append \"root=/dev/ram rw rdinit=/bin/sh console=ttyAMA0\""
+            elif "arm64" == arch_type or "aarch64" == arch_type:
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/Image"
+                command += f" -append \"root=/dev/ram rw rdinit=/bin/sh console=ttyAMA0\""
+
+            command += f" -initrd {self.DEPLOY_PATH}/initramfs.cpio"
         else:
-            raise Exception(f"Unsupported architecture type '{arch_type}'")
+            if "arm" == arch_type:
+                command += f" -machine virt"
+                command += f" -cpu cortex-a15"
+                command += f" -append \"root=/dev/ram rw rdinit=/bin/sh console=ttyAMA0\""
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/zImage"
+            elif "arm64" == arch_type or "aarch64" == arch_type:
+                command += f" -machine virt"
+                command += f" -cpu cortex-a53"
+                command += f" -append \"root=/dev/ram rw rdinit=/bin/sh console=ttyAMA0\""
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/Image"
 
+            command += f" -smp cores=1"
+            command += f" -m 512M"
+            command += f" -nographic"
+            command += f" -serial mon:stdio"
+            command += f" -no-reboot"
+            command += f" -d guest_errors"
+            command += f" -initrd {self.DEPLOY_PATH}/initramfs.cpio"
+
+        self.subprocess_must_succeed(f"cd {self.DEPLOY_PATH} && " + self._get_qemu_executable_name() + command)
+
+class busybox_remove(BusyboxDeploymentTask):
+    def __init__(self):
+        super().__init__()
+        self.set_name(busybox_remove.__name__)
+
+    def execute(self):
+        self.subprocess_must_succeed(f"rm -rf {self.DOWNLOAD_PATH}")
+        self.subprocess_must_succeed(f"rm -rf {self.SOURCE_PATH}")
+        self.subprocess_must_succeed(f"rm -rf {self.BUILD_PATH}")
+        self.subprocess_must_succeed(f"rm -rf {self.DEPLOY_PATH}")

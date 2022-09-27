@@ -1,0 +1,6 @@
+----- Menuconfig -----
+
+Filesystem images -> cpio the root filesystem (for use as an initial RAM filesystem)
+Host utilities -> host qemu (disable)
+Target packages -> Libraries -> Hardware handling -> dtc ( libfdt )
+Target option -> Target architecture -> AArch64 ( little endian )

@@ -1,0 +1,19 @@
+----- Menuconfig -----
+
+Boot options -> Default kernel command string -> console=ttyAMA0
+Boot options -> Kernel command line type -> Use bootloader kernel arguments if available
+Kernel hacking -> Compile-time checks and compiler options -> Debug information -> Generate DWARF Version 5 debuginfo
+Kernel hacking -> Compile-time checks and compiler options -> Provide GDB scripts for kernel debugging
+
+
+
+----- Dev files -----
+
+kernel 5.14.13:
+/mnt/dev/linux/source/linux-5.14.13/arch/arm64/include/asm/assembler.h
+/mnt/dev/linux/source/linux-5.14.13/arch/arm64/mm/cache.S
+/mnt/dev/linux/source/linux-5.14.13/include/linux/init.h
+/mnt/dev/linux/source/linux-5.14.13/arch/arm64/kernel/head.S
+/mnt/dev/linux/source/linux-5.14.13/arch/arm64/kernel/efi-header.S
+/mnt/dev/linux/source/linux-5.14.13/init/main.c
+/mnt/dev/linux/source/linux-5.14.13/kernel/sched/idle.c
