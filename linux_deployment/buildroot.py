@@ -1,5 +1,5 @@
 '''
-Created on Dec 30, 2021
+Created on Sep 8, 2022
 
 @author: vladyslav_goncharuk
 '''
@@ -10,35 +10,35 @@ import re
 from linux_deployment import general
 from paf.paf_impl import logger, CommunicationMode
 
-class LinuxKernelDeploymentTask(general.LinuxDeploymentTask):
+class BuildrootDeploymentTask(general.LinuxDeploymentTask):
 
     def __init__(self):
         super().__init__()
 
-        self.DOWNLOAD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${ARCH_TYPE}/" + general.LINUX_KERNEL_FOLDER_PREFIX + "${LINUX_KERNEL_VERSION}"
-        self.SOURCE_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/" + general.LINUX_KERNEL_FOLDER_PREFIX + "${LINUX_KERNEL_VERSION}"
-        self.BUILD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/" + general.LINUX_KERNEL_FOLDER_PREFIX + "${LINUX_KERNEL_VERSION}"
-        self.DEPLOY_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/" + general.LINUX_KERNEL_FOLDER_PREFIX + "${LINUX_KERNEL_VERSION}"
+        self.DOWNLOAD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DOWNLOAD_DIR}/${ARCH_TYPE}/" + general.BUILDROOT_FOLDER_PREFIX + "${BUILDROOT_VERSION}"
+        self.SOURCE_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE}/" + general.BUILDROOT_FOLDER_PREFIX + "${BUILDROOT_VERSION}"
+        self.BUILD_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${BUILD_DIR}/${ARCH_TYPE}/" + general.BUILDROOT_FOLDER_PREFIX + "${BUILDROOT_VERSION}"
+        self.DEPLOY_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/" + general.BUILDROOT_FOLDER_PREFIX + "${BUILDROOT_VERSION}"
 
-    def _get_linux_kernel_config_target(self):
+    def _get_buildroot_config_target(self):
         target = ""
 
         arch_type = self._get_arch_type()
 
         if(arch_type == "ARM"):
-            target = "vexpress_defconfig"
+            target = "qemu_arm_vexpress_defconfig"
         elif(arch_type == "ARM64" or arch_type == "AARCH64"):
-            target = "defconfig"
+            target = "qemu_aarch64_virt_defconfig"
         else:
             target = "defconfig"
 
         return target
 
-class linux_kernel_sync(LinuxKernelDeploymentTask):
+class buildroot_sync(BuildrootDeploymentTask):
 
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_sync.__name__)
+        self.set_name(buildroot_sync.__name__)
 
     def execute(self):
 
@@ -50,18 +50,17 @@ class linux_kernel_sync(LinuxKernelDeploymentTask):
         self.subprocess_must_succeed(f"cd {self.SOURCE_PATH} && "
             f"( if [ ! -d .git ]; then rm -rf {self.SOURCE_PATH}; fi; )")
         self.subprocess_must_succeed("( cd ${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE} && "
-            "git clone -b ${LINUX_KERNEL_VERSION} ${LINUX_KERNEL_GIT_REFERENCE} " + self.SOURCE_PATH + " ) && "
+            "git clone -b ${BUILDROOT_VERSION} ${BUILDROOT_GIT_REFERENCE} " + self.SOURCE_PATH + " ) && "
             f"( cd {self.SOURCE_PATH} && " +
-            "git checkout tags/${LINUX_KERNEL_VERSION} -b ${LINUX_KERNEL_VERSION} ) || :")
+            "git checkout tags/${BUILDROOT_VERSION} -b ${BUILDROOT_VERSION} ) || :")
 
-class linux_kernel_clean(LinuxKernelDeploymentTask):
+class buildroot_clean(BuildrootDeploymentTask):
 
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_clean.__name__)
+        self.set_name(buildroot_clean.__name__)
 
     def execute(self):
-
         arch_type = self._get_arch_type()
         used_compiler = self._get_compiler()
 
@@ -69,24 +68,22 @@ class linux_kernel_clean(LinuxKernelDeploymentTask):
             arch_type.lower() + " CROSS_COMPILE=" + used_compiler + " distclean",
             communication_mode = CommunicationMode.PIPE_OUTPUT)
 
-class linux_kernel_configure(LinuxKernelDeploymentTask):
+class buildroot_configure(BuildrootDeploymentTask):
 
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_configure.__name__)
+        self.set_name(buildroot_configure.__name__)
 
     def execute(self):
-
         arch_type = self._get_arch_type()
         used_compiler = self._get_compiler()
-        target = self._get_linux_kernel_config_target()
 
-        if not self.has_environment_true_param("LINUX_KERNEL_CONFIGURE_EDIT"):
+        if not self.has_environment_true_param("BUILDROOT_CONFIGURE_EDIT"):
             self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" + arch_type.lower() +
-                " CROSS_COMPILE=" + used_compiler + "- " + target,
+                " CROSS_COMPILE=" + used_compiler + "- " + self._get_buildroot_config_target(),
                 communication_mode = CommunicationMode.PIPE_OUTPUT)
 
-        config_flags_raw = self.get_environment().getVariableValue("LINUX_KERNEL_CONFIG_FLAGS")
+        config_flags_raw = self.get_environment().getVariableValue("BUILDROOT_CONFIG_FLAGS")
 
         config_dict = {}
 
@@ -95,7 +92,6 @@ class linux_kernel_configure(LinuxKernelDeploymentTask):
             logger.info(f"config_flags_raw - '{config_flags_raw}'")
 
             splited_config_flags = re.compile("[ ]*\|[ ]*").split(config_flags_raw)
-
             config_key_value_pair_regex = re.compile("[ ]*=[ ]*")
 
             for config_flag in splited_config_flags:
@@ -103,7 +99,6 @@ class linux_kernel_configure(LinuxKernelDeploymentTask):
                 logger.info(f"Config flag - '{config_flag}'")
 
                 splited_config_key_value = config_key_value_pair_regex.split(config_flag)
-
                 if len(splited_config_key_value) == 2:
                     config_dict[splited_config_key_value[0]] = splited_config_key_value[1]
                     logger.info(f"Parsed key - '{splited_config_key_value[0]}'; parsed value - '{splited_config_key_value[1]}'")
@@ -112,69 +107,55 @@ class linux_kernel_configure(LinuxKernelDeploymentTask):
             self.subprocess_must_succeed(f"sed -i -E '/{config_key}(=| )/d' {self.BUILD_PATH}/.config; "
                                           f"echo \'{config_key}={config_dict[config_key]}\' >> " + f"{self.BUILD_PATH}/.config")
 
-        config_target = ""
-
-        config_adjustment_mode = self.get_environment_param("LINUX_KERNEL_CONFIG_ADJUSTMENT_MODE")
+        config_adjustment_mode = self.get_environment_param("BUILDROOT_CONFIG_ADJUSTMENT_MODE")
 
         if  config_adjustment_mode == "PARAMETERS_ONLY":
-            config_target = "savedefconfig"
+            pass
         elif config_adjustment_mode == "USER_INTERACTIVE":
-            config_target = "menuconfig"
-
-        self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} "
-            "ARCH=" + arch_type.lower() + " CROSS_COMPILE=" + used_compiler + "- " + config_target,
+            self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} "
+            "ARCH=" + arch_type.lower() + " CROSS_COMPILE=" + used_compiler + "- " + 'menuconfig',
             communication_mode = CommunicationMode.PIPE_OUTPUT)
 
-class linux_kernel_build(LinuxKernelDeploymentTask):
+class buildroot_build(BuildrootDeploymentTask):
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_build.__name__)
+        self.set_name(buildroot_build.__name__)
 
     def execute(self):
 
         arch_type = self._get_arch_type()
         used_compiler = self._get_compiler()
 
-        additional_params = ""
-
-        self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" +
-            arch_type.lower() + " CROSS_COMPILE=" + used_compiler + "- " + "-j${BUILD_SYSTEM_CORES_NUMBER}" +
-            additional_params + " all",
+        self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}; make O={self.BUILD_PATH} -C {self.SOURCE_PATH} ARCH=" + arch_type.lower() +
+            " CROSS_COMPILE=" + used_compiler + "- -j${BUILD_SYSTEM_CORES_NUMBER} all",
             communication_mode = CommunicationMode.PIPE_OUTPUT)
 
-class linux_kernel_deploy(LinuxKernelDeploymentTask):
+class buildroot_deploy(BuildrootDeploymentTask):
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_deploy.__name__)
+        self.set_name(buildroot_deploy.__name__)
 
     def execute(self):
 
+        products_folder = "images"
+
         self.subprocess_must_succeed(f"rm -rf {self.DEPLOY_PATH}; mkdir -p {self.DEPLOY_PATH};")
 
-        products_folder = "arch/" + self._get_arch_type().lower() + "/boot"
-
-        path_prefix = f"{self.BUILD_PATH}"
-
         files_list: list = [
-            os.path.join( path_prefix, products_folder, "Image" ),
-            os.path.join( path_prefix, products_folder, "zImage" ),
-            os.path.join( path_prefix, products_folder, "Image.gz" ),
-            os.path.join( path_prefix, products_folder, "compressed/vmlinux" ) ]
+            os.path.join( f"{self.BUILD_PATH}", products_folder, "Image"),
+            os.path.join( f"{self.BUILD_PATH}", products_folder, "zImage"),
+            os.path.join( f"{self.BUILD_PATH}", products_folder, "rootfs.ext2"),
+            os.path.join( f"{self.BUILD_PATH}", products_folder, "rootfs.tar"),
+            os.path.join( f"{self.BUILD_PATH}", products_folder, "rootfs.cpio"),
+        ]
 
         for file in files_list:
-            self.subprocess_must_succeed(f"cp {file} {self.DEPLOY_PATH}/ || :")
+            self.subprocess_must_succeed(f"cp {file} {self.DEPLOY_PATH} || :")
 
-        directories_list: list = [
-              os.path.join( path_prefix, products_folder, "dts" )
-              ]
-
-        for directory in directories_list:
-            self.subprocess_must_succeed(f"cp -r {directory} {self.DEPLOY_PATH}/")
-
-class linux_kernel_run(LinuxKernelDeploymentTask):
+class buildroot_run(BuildrootDeploymentTask):
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_run.__name__)
+        self.set_name(buildroot_run.__name__)
 
     def execute(self):
         arch_type = self._get_arch_type().lower()
@@ -185,22 +166,24 @@ class linux_kernel_run(LinuxKernelDeploymentTask):
             command += " " + self.get_environment_param("QEMU_CONFIG")
 
             if "arm" == arch_type:
-                command += f" -kernel " + f"{self.DEPLOY_PATH}" + f"/zImage"
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/zImage"
                 command += f" -append \"root=/dev/ram rw console=ttyAMA0\""
             elif "arm64" == arch_type or "aarch64" == arch_type:
-                command += f" -kernel " + f"{self.DEPLOY_PATH}" + f"/Image"
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/Image"
                 command += f" -append \"root=/dev/ram rw console=ttyAMA0\""
+
+            command += f" -initrd {self.DEPLOY_PATH}/rootfs.cpio"
         else:
             if "arm" == arch_type:
                 command += f" -machine virt"
                 command += f" -cpu cortex-a15"
-                command += f" -kernel " + f"{self.DEPLOY_PATH}" + f"/zImage"
                 command += f" -append \"root=/dev/ram rw console=ttyAMA0\""
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/zImage"
             elif "arm64" == arch_type or "aarch64" == arch_type:
                 command += f" -machine virt"
                 command += f" -cpu cortex-a53"
-                command += f" -kernel " + f"{self.DEPLOY_PATH}" + f"/Image"
-                command += f" -append \"root=/dev/ram rw console=ttyAMA0"
+                command += f" -append \"root=/dev/ram rw console=ttyAMA0\""
+                command += f" -kernel " + f"{self.LINUX_KERNEL_IMAGE_PATH}" + f"/Image"
 
             command += f" -smp cores=1"
             command += f" -m 512M"
@@ -208,15 +191,16 @@ class linux_kernel_run(LinuxKernelDeploymentTask):
             command += f" -serial mon:stdio"
             command += f" -no-reboot"
             command += f" -d guest_errors"
+            command += f" -initrd {self.DEPLOY_PATH}/rootfs.cpio"
 
         self.subprocess_must_succeed(f"cd {self.DEPLOY_PATH} && " + self._get_qemu_executable_name() + command)
 
-class linux_kernel_remove(LinuxKernelDeploymentTask):
+class buildroot_remove(BuildrootDeploymentTask):
     def __init__(self):
         super().__init__()
-        self.set_name(linux_kernel_remove.__name__)
+        self.set_name(buildroot_remove.__name__)
 
-    def execute( self ):
+    def execute(self):
         self.subprocess_must_succeed(f"rm -rf {self.DOWNLOAD_PATH}")
         self.subprocess_must_succeed(f"rm -rf {self.SOURCE_PATH}")
         self.subprocess_must_succeed(f"rm -rf {self.BUILD_PATH}")

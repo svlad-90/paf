@@ -1011,6 +1011,7 @@ class ExecutionContext:
         return conditions
 
     def parse_config(self, config_path, execution_context, environment):
+        logger.info("Attempt to parse config file '" + config_path + "'")
         tree = ET.parse(config_path)
         root = tree.getroot()
 

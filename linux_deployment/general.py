@@ -4,40 +4,47 @@ Created on Dec 29, 2021
 @author: vladyslav_goncharuk
 '''
 
+import general
 from paf.paf_impl import Task
 
+LINUX_KERNEL_FOLDER_PREFIX = "lk_"
+BUSYBOX_FOLDER_PREFIX = "bb_"
+UBOOT_FOLDER_PREFIX = "ub_"
+BUILDROOT_FOLDER_PREFIX = "br_"
+
 class LinuxDeploymentTask(Task):
+
+    def __init__(self):
+        super().__init__()
+        self.LINUX_KERNEL_IMAGE_PATH = "${ROOT}/${LINUX_DEPLOYMENT_DIR}/${DEPLOY_DIR}/${ARCH_TYPE}/" + general.LINUX_KERNEL_FOLDER_PREFIX + "${LINUX_KERNEL_VERSION}"
 
     def _get_arch_type(self):
         return self.get_environment_param("ARCH_TYPE")
 
     def _get_compiler(self):
-        compiler = ""
-
         arch_type = self._get_arch_type()
-
-        if(arch_type == "ARM"):
-            compiler = "${ARM_COMPILER}"
-        elif(arch_type == "ARM64"):
-            compiler = "${ARM64_COMPILER}"
-        else:
-            raise Exception("Impossible to determine compiler path for '' architecture!")
-
-        return compiler
+        return "${" + arch_type + "_COMPILER}"
 
     def _get_compiler_path(self):
-        compiler_path = ""
-
         arch_type = self._get_arch_type()
+        return "${" + arch_type + "_COMPILER_PATH}"
 
-        if(arch_type == "ARM"):
-            compiler_path = "${ARM_COMPILER_PATH}"
-        elif(arch_type == "ARM64"):
-            compiler_path = "${ARM64_COMPILER_PATH}"
-        else:
-            raise Exception("Impossible to determine compiler path!")
+    def _get_qemu_executable_name(self):
 
-        return compiler_path
+        prefix = ""
+
+        if self.has_non_empty_environment_param("QEMU_FOLDER"):
+            prefix = self.get_environment_param("QEMU_FOLDER") + "/"
+
+        arch_type = self._get_arch_type().lower()
+        if "x86" == arch_type:
+            return prefix + "qemu-system-x86_64"
+        elif "x86_64" == arch_type:
+            return prefix + "qemu-system-x86_64"
+        elif "arm" == arch_type or "arm32" == arch_type:
+            return prefix + "qemu-system-arm"
+        elif "arm64" == arch_type or "aarch64" == arch_type:
+            return prefix + "qemu-system-aarch64"
 
 class prepare_directories(LinuxDeploymentTask):
 
@@ -63,14 +70,4 @@ class install_dependencies(LinuxDeploymentTask):
         self.set_name(install_dependencies.__name__)
 
     def execute(self):
-
-        used_compiler = ""
-
-        arch_type = self.get_environment_param("ARCH_TYPE")
-
-        if(arch_type == "ARM"):
-            used_compiler = "${ARM_COMPILER}"
-        elif(arch_type == "ARM64"):
-            used_compiler = "${ARM64_COMPILER}"
-
-        self.subprocess_must_succeed("sudo -S apt-get -y install gcc-" + used_compiler + " libssl-dev qemu-system-arm")
+        self.subprocess_must_succeed("sudo -S apt-get -y install gcc-" + self._get_compiler() + " libssl-dev qemu-system-arm")

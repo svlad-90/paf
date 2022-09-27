@@ -98,7 +98,6 @@ def load_module(absolute_path):
             raise ImportError(msg.format(missing_module, module_root))
 
         print("Could not directly load module, including dir: {}".format(module_root))
-        sys.path.append(module_root)
         spec = importlib.util.spec_from_file_location(module_name, absolute_path)
         py_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(py_mod)
@@ -108,6 +107,8 @@ def load_all_modules_in_dir(module_root_dir):
 
     if not os.path.isdir(module_root_dir):
         raise Exception(f"Provided path '{module_root_dir}' is not a directory!")
+
+    sys.path.insert(0, module_root_dir)
 
     found_python_files = glob.glob(f"{module_root_dir}/*.py")
 
@@ -119,6 +120,11 @@ def load_all_modules_in_dir(module_root_dir):
 
             if loaded_module:
                 result[loaded_module_name] = loaded_module
+
+    for file in os.listdir(module_root_dir):
+        d = os.path.join(module_root_dir, file)
+        if os.path.isdir(d) and d != os.path.join(module_root_dir, "__pycache__"):
+            result.update(load_all_modules_in_dir(d))
 
     return result
 

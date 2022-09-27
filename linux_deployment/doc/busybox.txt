@@ -1,0 +1,3 @@
+----- Menuconfig -----
+
+Settings -> Build static binary (no shared libs) (enable)

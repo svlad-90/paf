@@ -1,0 +1,62 @@
+----- Menuconfig -----
+
+u-boot:
+Boot options -> Boot images -> Enable support for Android Boot Images
+Update support -> Android A/B updates
+Library routines -> Android Verified Boot -> Android Verified Boot 2.0 support
+Partition Types -> Enable Partition Labels (disklabels) support
+Device Drivers -> MMC Host controller Support -> MMC/SD/SDIO card support
+Security support -> Build Android Verified Boot operations
+Security support -> Define AVB buffer address -> 0x10000000
+Security support -> Define AVB buffer SIZE -> 0x200
+Command line interface -> Android command support -> ab_select
+Command line interface -> Debug commands -> avb
+
+u-boot aosp:
+Boot options -> Boot images -> Enable support for Android Boot Images
+Init options -> Support for Android Bootloader boot flow
+Init options -> Support for Android Recovery Flow on Android 10+ devices
+Update support -> Android A/B updates
+Library routines -> Android Verified Boot -> Android Verified Boot 2.0 support
+Library routines -> Boot Configuration -> Boot Configuration support
+Security support -> Build Android Verified Boot options
+Command line interface -> Android command support -> ab_select
+Command line interface -> Android command support -> boot_android
+Command line interface -> Debug commands -> avd
+
+
+
+----- Dev files -----
+
+u-boot v2021.10:
+/mnt/dev/linux/source/u-boot-v2021.10/include/log.h
+/mnt/dev/linux/source/u-boot-v2021.10/include/configs/qemu-arm.h
+/mnt/dev/linux/source/u-boot-v2021.10/include/config_distro_bootcmd.h
+/mnt/dev/linux/source/u-boot-v2021.10/common/board_f.c
+/mnt/dev/linux/source/u-boot-v2021.10/common/command.c
+/mnt/dev/linux/source/u-boot-v2021.10/cmd/bootm.c
+/mnt/dev/linux/source/u-boot-v2021.10/arch/arm/lib/bootm.c
+/mnt/dev/linux/source/u-boot-v2021.10/include/image.h
+/mnt/dev/linux/source/u-boot-v2021.10/common/image.c
+/mnt/dev/linux/source/u-boot-v2021.10/arch/arm/include/asm/system.h
+/mnt/dev/linux/source/u-boot-v2021.10/arch/arm/cpu/armv8/transition.S
+
+u-boot aosp:
+/mnt/dev/android/source/u-boot-master/include/log.h
+/mnt/dev/android/source/u-boot-master/include/configs/qemu-arm.h
+/mnt/dev/android/source/u-boot-master/include/config_distro_bootcmd.h
+/mnt/dev/android/source/u-boot-master/common/board_f.c
+/mnt/dev/android/source/u-boot-master/common/command.c
+/mnt/dev/android/source/u-boot-master/cmd/bootm.c
+/mnt/dev/android/source/u-boot-master/boot/bootm.c
+/mnt/dev/android/source/u-boot-master/boot/image-board.c
+/mnt/dev/android/source/u-boot-master/include/image.h
+/mnt/dev/android/source/u-boot-master/boot/image.c
+/mnt/dev/android/source/u-boot-master/boot/image-android.c
+
+
+
+----- Other -----
+
+printf( "@TDA: [%s:%d] -> \n", __FUNCTION__, __LINE__ );
+do_bootm -> do_bootm_states -> bootm_start -> bootm_find_os -> bootm_find_other -> bootm_find_images -> boot_get_ramdisk
