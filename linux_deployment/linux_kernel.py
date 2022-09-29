@@ -142,6 +142,10 @@ class linux_kernel_build(LinuxKernelDeploymentTask):
             additional_params + " all",
             communication_mode = CommunicationMode.PIPE_OUTPUT)
 
+        self.subprocess_must_succeed(f"cd {self.SOURCE_PATH}/tools/bootconfig; mkdir -p {self.BUILD_PATH}/tools/bootconfig;" +
+            f" make O={self.BUILD_PATH}/tools/bootconfig -C {self.SOURCE_PATH}/tools/bootconfig",
+            communication_mode = CommunicationMode.PIPE_OUTPUT)
+
 class linux_kernel_deploy(LinuxKernelDeploymentTask):
     def __init__(self):
         super().__init__()
