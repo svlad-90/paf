@@ -29,12 +29,12 @@ class LinuxDeploymentTask(Task):
         arch_type = self._get_arch_type()
         return "${" + arch_type + "_COMPILER_PATH}"
 
-    def _get_qemu_executable_name(self):
+    def _get_qemu_path(self):
 
         prefix = ""
 
-        if self.has_non_empty_environment_param("QEMU_FOLDER"):
-            prefix = self.get_environment_param("QEMU_FOLDER") + "/"
+        if self.has_non_empty_environment_param("QEMU_PATH"):
+            prefix = self.get_environment_param("QEMU_PATH") + "/"
 
         arch_type = self._get_arch_type().lower()
         if "x86" == arch_type:

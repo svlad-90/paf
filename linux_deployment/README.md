@@ -78,7 +78,7 @@ In order to change the executed scenario, phase or task, type in the command the
 
 |Parameter|Comment|
 |---|---|
-|QEMU_FOLDER|Folder, in which QEMU binaries are located.|
+|QEMU_PATH|Folder, in which QEMU binaries are located.|
 |QEMU_CONFIG|Custom QEMU config. If not specified, the default one will be used for LFS 'run' commands.|
 |ROOT|Root folder of the project. All the other things will be placed inside this folder.|
 |LINUX_DEPLOYMENT_DIR|Sub-directory, created inside the 'ROOT'.|

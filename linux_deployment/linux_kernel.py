@@ -213,7 +213,7 @@ class linux_kernel_run(LinuxKernelDeploymentTask):
             command += f" -no-reboot"
             command += f" -d guest_errors"
 
-        self.subprocess_must_succeed(f"cd {self.DEPLOY_PATH} && " + self._get_qemu_executable_name() + command)
+        self.subprocess_must_succeed(f"cd {self.DEPLOY_PATH} && " + self._get_qemu_path() + command)
 
 class linux_kernel_remove(LinuxKernelDeploymentTask):
     def __init__(self):
