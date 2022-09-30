@@ -193,7 +193,7 @@ class buildroot_run(BuildrootDeploymentTask):
             command += f" -d guest_errors"
             command += f" -initrd {self.DEPLOY_PATH}/rootfs.cpio"
 
-        self.subprocess_must_succeed(f"cd {self.DEPLOY_PATH} && " + self._get_qemu_executable_name() + command)
+        self.subprocess_must_succeed(f"cd {self.DEPLOY_PATH} && " + self._get_qemu_path() + command)
 
 class buildroot_remove(BuildrootDeploymentTask):
     def __init__(self):

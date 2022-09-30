@@ -1,7 +1,7 @@
 <paf_config>
 
     <!-- QEMU-specific variables -->
-    <param name="QEMU_FOLDER" value="~/Projects/qemu/qemu/build"/>
+    <param name="QEMU_PATH" value="/mnt/android/build/qemu"/>
     <param name="QEMU_CONFIG" value="-drive if=none,index=0,id=main,file=/mnt/android/build/android-12.1.0_r8/target/product/xenvm_trout_arm64/build_images/main/main.img
 -device virtio-blk-pci,modern-pio-notify=on,drive=main
 -serial mon:stdio
