@@ -68,14 +68,14 @@ That should be enough to proceed.
 3. Create any number of "*.py" files inside "./paf/my_scenarios/" folder, which will contain your automation scripts. You can create any number of python modules.
 4. Develop your automation scripts, using the "./paf/paf/paf_impl.py" module. Import it to your scrips and develop the tasks. More information on how to do it is [located here](#how-to-declare-the-task)
 5. Create xml file with any name in any location, which will contain parameters and declaration of scenarios and phases. Let's call it scenarios.xml and place it inside the "./paf/my_scenarios/scenarios.xml" folder.
-6. Fill in the file with the content. More information on how to do it is [located here](#the-content-of-the-xml-configuration-file)
+6. Fill the file with content. More information on how to do it is [located here](#the-content-of-the-xml-configuration-file)
 7. Once both python code and xml configuration are ready to go - start the paf tool, feeding your developed artifacts to it. More information on how to do it is [located here](#how-to-execute-paf-scenarios)
 
 ----
 
-## How to declare the task?
+## How to declare a task?
 
-The task is a basic building-block, which comtains one or more commands inside itself. You can execute a single task. Beside that you can group one or more tasks inside the phase, and one or more phases inside the scenario. More information on how to do it is [located here](#the-content-of-the-xml-configuration-file).
+A task is a basic building-block, which contains of one or more commands. You can execute a single task. Beside that you can group one or more tasks inside a phase and one or more phases inside a scenario. More information on how to do it is [located here](#the-content-of-the-xml-configuration-file).
 
 But, as of now, let's go back to the task. Here is an example of the dummy task, which will call echo:
 
@@ -98,60 +98,62 @@ class echo_test(SSHLocalClient):
 
 ```
 
-As you can see, your task is a simple python class, which inherits from the framework's vase classes. The requirements to such class are rather simple:
+As you can see, your task is a simple python class, which inherits from the framework's base classes. The requirements to such class are rather simple:
 
-- It should inherit from paf_impl.Task or one of its sub-classes ( e.g. paf_impl.SSHLocalClient )
-- It should declare and imp[lement the "execute" method with no parameters. This method is used by the framework to start the execution of your task
-- Such a class should implement the \_\_init\_\_ method, which should:
+- It should inherit from `paf.paf_impl` - A task or one of its sub-classes ( e.g. paf_impl.SSHLocalClient )
+- It should declare and implement the `execute` method with no parameters. This method is used by the framework to start the execution of your task
+- Such a class should implement the `__init__` method, which should:
   - Call the super's init method
   - Pass the name of the task using the self.set_name method
 
 That's all. That simple.
 
 The commands inside your task might be executed using one of the following supported principles:
-- via creating a sub-process on the machine, which is executing the PAF scenario
-- via SSH connection from the machine, which is executing PAF scenario to one or more target machines
+1. via creating a sub-process on the machine, which is executing the PAF scenario
+2. via SSH connection from the machine, which is executing PAF scenario to one or more target machines
 
 **Note!** In case of the usage of the SSH communication, make sure that the target machine has an established SSH server.
 
 The API of the paf_impl.Task, which should be used by the developer of the scenarios, consists of the following protected methods:
 
-- **subprocess_must_succeed**(**cmd**, **timeout** = 0, **expected_return_codes** = [0], **substitute_params** = True, **shell** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **communication_mode** = CommunicationMode.PIPE_OUTPUT)
+----
 
-  This method executes a single command as a sub-process. The purpose of this method is to intentionally fail in case of error.
+`subprocess_must_succeed(cmd, timeout = 0, expected_return_codes = [0], substitute_params = True, shell = True, exec_mode = ExecutionMode.COLLECT_DATA, communication_mode = CommunicationMode.PIPE_OUTPUT)`
 
-  **Parameters:**
+This method executes a single command as a sub-process. The purpose of this method is to intentionally fail in case of error.
 
-  - **cmd** - the command that will be executed. Might be provided in one of the following forms:
-    - if the "shell" parameter is equal to True, the "cmd" parameter can be provided in the form of string or a list. Examples:
-      - self.subprocess_must_succeed("echo 123", shell=True)
-      - self.subprocess_must_succeed(["echo", "123"], shell=True)
-    - if the "shell" parameter is equal to False, the "cmd" parameter can be provided in the form of string. Example:
-      - self.subprocess_must_succeed("echo 123", shell=False)
-      In this case, providing a list will raise an exception, as it is quite hard to split a complex bash string into a set of arguments.
-  - **timeout** - expected duration of the command in seconds. If exceeded, the exception is being raised. Currently this parameter **is ignored** in this call. To be done.
-  - **expected_return_codes** - list of the expected returned codes. By default contains only 0 return code. In case if returned code of the cmd is not found in this list - the exception is being raised.
-  - **substitute_params** - whether parameters of cmd should be substituted. If set to true, the bash-like parameters substitution will take place. The parameters which take part in substitution are:
-    - parameters which are passed from the command line
-    - parameters, which are parsed from the xml configuration file
-    - parameters, which are injected into the execution environment by the other tasks
-    - the fields of the class, which are contained in self.\_\_dict\_\_ collection
-  - **shell** - if parameter is equal to True, the "/bin/bash" sub-shell will be created to execute the command. Only in such a mode the "cmd" could be a bash script with pipes, variables, logical operators, etc. Otherwise, the "cmd" should contain **ONLY** call to one executabe with its parameters. Examples:
-    - self.subprocess_must_succeed("cd ~/ && echo "Hello, world!" > ./new_file.txt && cat ./new_file.txt", shell=True)
-    - self.subprocess_must_succeed("echo 123", shell=False)
-    - self.subprocess_must_succeed(["echo", "123"], shell=False)
-    **Note!** In case of shell mode, the command will be executed in a subshell, which will not receive certain signals from the OS. E.g. the interactive console application will not react to change of the terminal size. The PAF framework tries to minimize such side-effects. E.g. we modify environment of the running process, so that it contain the size of the terminal once you start the sub-process. Still you might face some side-effects. To avoid them - try to use shell=False for interactive applications.
-  - **exec_mode** - executaion mode. Might contain one of the following values:
-    - **ExecutionMode.COLLECT_DATA** - will print data to the terminal's stdout. Will process stdin. Will collect stdout and provide it back to the caller, so that the data could be parsed by the calling code
-    - **ExecutionMode.INTERACTIVE** - will print data to the terminal's stdout. Will process stdin. Will **NOT** collect stdout. The returned output will be an empty string.
-    - **ExecutionMode.DEV_NULL** - will **NOT** print data to the terminal's stdout. Will process stdin. Will **NOT** collect stdout. The returned output will be an empty string.
-    **Note!** Be aware that in case of usage of the **communication_mode = CommunicationMode.USE_PTY** the stderr and stdout would be mixed inside the returned output string. There is no way to distinguish between them in such a case.
-  - **communication_mode** - specifies one of the supported communication modes. Can take one of the following values:
-    - CommunicationMode.USE_PTY - will redirect output to a **pseudo-terminal pair**. The executed sub-process will think, that it is executed **inside a tty**. Some applications, e.g. anroid repo tool will print a progress only in such a mode, and will omit it in CommunicationMode.PIPE_OUTPUT.
-    - CommunicationMode.PIPE_OUTPUT - will pipe all output **without** usage of the additional PTY. The executed sub-process will think, that it is **NOT running in a tty**. Some applications, e.g. make, will not send console escape sequences in such a case. In this mode the output would be a build log, which you can put to a file. The one, where each next directive will not "overwrite" the previous one.
+**Parameters:**
 
-  **Returns:**
-  Command output as a string.
+- `cmd` - the command that will be executed. Might be provided in one of the following forms:
+  - if the "shell" parameter is equal to True, the `cmd` parameter can be provided in the form of string or a list.
+  Examples:
+    - `self.subprocess_must_succeed("echo 123", shell=True)`
+    - `self.subprocess_must_succeed(["echo", "123"], shell=True)`
+  - if the "shell" parameter is equal to False, the `cmd` parameter can be provided in the form of string. Example:
+    - `self.subprocess_must_succeed("echo 123", shell=False)`
+    - In this case, providing a list will raise an exception, as it is quite hard to split a complex bash string into a set of arguments.
+- `timeout` - expected duration of the command in seconds. If exceeded, the exception is being raised. Currently this parameter **is ignored** in this call. To be done.
+- `expected_return_codes` - list of the expected returned codes. By default contains only 0 return code. In case if returned code of the cmd is not found in this list - an exception is being raised.
+- `substitute_params` - whether parameters of `cmd` shall be substituted. If set to `true`, the bash-like parameters substitution will take place. The parameters which take part in substitution are:
+  - parameters which are passed from the command line
+  - parameters, which are parsed from the xml configuration file
+  - parameters, which are injected into the execution environment by the other tasks
+  - the fields of the class, which are contained in `self.__dict__` collection
+- `shell` - if parameter is equal to True, the `/bin/bash` sub-shell will be created to execute the command. Only in this mode the `cmd` could be a bash script with pipes, variables, logical operators, etc. Otherwise, the `cmd` must contain a call to one executabe with its parameters. Examples:
+  - `self.subprocess_must_succeed("cd ~/ && echo "Hello, world!" > ./new_file.txt && cat ./new_file.txt", shell=True)`
+  - `self.subprocess_must_succeed("echo 123", shell=False)`
+  - `self.subprocess_must_succeed(["echo", "123"], shell=False)`
+  - **Note!** In case of shell mode (`shell=True`) the command will be executed in a subshell which will not receive certain signals from the OS. E.g. the interactive console application will not react to change of the terminal size. The PAF framework tries to minimize such side-effects. E.g. we modify the environment of a running process that it contains the size of the terminal once you start the sub-process. Still you might face some side-effects. To avoid them - try to use `shell=False` for interactive applications.
+- `exec_mode` - executaion mode. Might contain one of the following values:
+  - `ExecutionMode.COLLECT_DATA` - will print data to the terminals `stdout`. Will process stdin. Will collect `stdout` and provide it back to the caller so that the data could be parsed by the calling code
+  - `ExecutionMode.INTERACTIVE` - will print data to the terminals `stdout`. Will process `stdin`. Will **NOT** collect stdout. The returned output will be an empty string.
+  - `ExecutionMode.DEV_NULL` - will **NOT** print data to the terminals `stdout`. Will process `stdin`. Will **NOT** collect `stdout`. The returned output will be an empty string.
+  - **Note!** Be aware that in case of usage of the `communication_mode = CommunicationMode.USE_PTY` output on `stderr` and `stdout` will be mixed inside the returned output string. There is no way to distinguish between them.
+- `communication_mode` - specifies one of the supported communication modes. Can take one of the following values:
+  - `CommunicationMode.USE_PTY` - will redirect the output to a `pseudo-terminal pair`. The executed sub-process will think, that it is executed **inside a tty**. Some applications, e.g. anroid repo tool will print a progress only in such a mode, and will omit it in CommunicationMode.PIPE_OUTPUT.
+  - `CommunicationMode.PIPE_OUTPUT` - will pipe all output **without** usage of the additional PTY. The executed sub-process will think, that it is **NOT running in a tty**. Some applications, e.g. make, will not send console escape sequences in such a case. In this mode the output would be a build log, which you can put to a file. The one, where each next directive will not "overwrite" the previous one.
+
+**Return value:** Output of `cmd` parameter as a string.
 
 - **exec_subprocess**(**cmd**, **timeout** = 0, **substitute_params** = True, **shell** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **communication_mode** = CommunicationMode.PIPE_OUTPUT)
 
@@ -160,10 +162,10 @@ The API of the paf_impl.Task, which should be used by the developer of the scena
   **Parameters:**
 
   - **cmd** - the command that will be executed. Might be provided in one of the following forms:
-    - if the "shell" parameter is equal to True, the "cmd" parameter can be provided in the form of string or a list. Examples:
+    - if the "shell" parameter is equal to True, the `cmd` parameter can be provided in the form of string or a list. Examples:
       - self.subprocess_must_succeed("echo 123", shell=True)
       - self.subprocess_must_succeed(["echo", "123"], shell=True)
-    - if the "shell" parameter is equal to False, the "cmd" parameter can be provided in the form of string. Example:
+    - if the "shell" parameter is equal to False, the `cmd` parameter can be provided in the form of string. Example:
       - self.subprocess_must_succeed("echo 123", shell=False)
       In this case, providing a list will raise an exception, as it is quite hard to split a complex bash string into a set of arguments.
   - **timeout** - expected duration of the command in seconds. If exceeded, the exception is being raised. Currently this parameter **is ignored** in this call. To be done.
@@ -172,7 +174,7 @@ The API of the paf_impl.Task, which should be used by the developer of the scena
     - parameters, which are parsed from the xml configuration file
     - parameters, which are injected into the execution environment by the other tasks
     - the fields of the class, which are contained in self.\_\_dict\_\_ collection
-  - **shell** - if parameter is equal to True, the "/bin/bash" sub-shell will be created to execute the command. Only in such a mode the "cmd" could be a bash script with pipes, variables, logical operators, etc. Otherwise, the "cmd" should contain **ONLY** call to one executabe with its parameters. Examples:
+  - **shell** - if parameter is equal to True, the "/bin/bash" sub-shell will be created to execute the command. Only in such a mode the `cmd` could be a bash script with pipes, variables, logical operators, etc. Otherwise, the `cmd` should contain **ONLY** call to one executabe with its parameters. Examples:
     - self.subprocess_must_succeed("cd ~/ && echo "Hello, world!" > ./new_file.txt && cat ./new_file.txt", shell=True)
     - self.subprocess_must_succeed("echo 123", shell=False)
     - self.subprocess_must_succeed(["echo", "123"], shell=False)
