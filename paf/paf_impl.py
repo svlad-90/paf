@@ -899,6 +899,8 @@ class ExecutionContext:
         self.__import_module_search_paths = []
         self.__imported_modules = {}
 
+        os.makedirs(log_dir, exist_ok=True)
+
         logger.set_log_dir(log_dir)
         logger.init()
 
