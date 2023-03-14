@@ -4,6 +4,7 @@ Created on Dec 28, 2021
 @author: vladyslav_goncharuk
 '''
 
+from collections import OrderedDict
 import paramiko
 import xml.etree.ElementTree as ET
 import logging
@@ -231,19 +232,43 @@ class SSHCommandOutput:
         self.exit_code = stdout.channel.recv_exit_status()
 
 class SSHConnection:
-    def __init__(self, host, user, port = 22, password = "", key_filename = ""):
+    def __init__(self, host, user, port = 22, password = "", key_filename = [], jumphost = None, passphrase = None):
         self.__host = host
         self.__user = user
         self.__password = password
         self.__key_filename = key_filename
         self.__port = port
         self.__connection_key = SSHConnection.create_connection_key(host, user, port)
-        self.connect()
+        self.__passphrase = passphrase
+        self.connect(jumphost)
 
-    def connect(self):
+    def connect(self, jumphost = None):
+
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.__client.connect(hostname=self.__host, username=self.__user, key_filename=self.__key_filename, password=self.__password, port=self.__port)
+
+        if jumphost:
+
+            jumphost_transport = jumphost.__client.get_transport()
+            src_addr = (jumphost.__host, jumphost.__port)
+            dest_addr = (self.__host, self.__port)
+            jumphost_channel = jumphost_transport.open_channel("direct-tcpip", dest_addr, src_addr)
+
+            self.__client.connect(hostname=self.__host,
+                username=self.__user,
+                key_filename=self.__key_filename,
+                password=self.__password,
+                port=self.__port,
+                sock = jumphost_channel,
+                passphrase = self.__passphrase)
+        else:
+            self.__client.connect(hostname=self.__host,
+                username=self.__user,
+                key_filename=self.__key_filename,
+                password=self.__password,
+                port=self.__port,
+                passphrase = self.__passphrase)
+
         self.__connected = True
 
         logger.info(f"connection to the {self.__connection_key} was successfully created.")
@@ -257,7 +282,7 @@ class SSHConnection:
                      cmd,
                      timeout = 0,
                      substitute_params = True,
-                     exec_mode = ExecutionMode.INTERACTIVE,
+                     exec_mode = ExecutionMode.COLLECT_DATA,
                      params = {}):
 
         logger.info("-------------------------------------")
@@ -265,12 +290,12 @@ class SSHConnection:
         logger.info(f"Executing command on the {self.__connection_key} connection.")
         logger.info(f"Command:")
 
-        unescaped_cmd = cmd
+        unescaped_cmd = cmd[:]
 
         if True == substitute_params:
-            unescaped_cmd = re.sub(r'\$\$', '$', cmd)
-            unescaped_cmd = re.sub(r'\{\{', '{', cmd)
-            unescaped_cmd = re.sub(r'\}\}', '}', cmd)
+            unescaped_cmd = re.sub(r'\$\$', '$', unescaped_cmd)
+            unescaped_cmd = re.sub(r'\{\{', '{', unescaped_cmd)
+            unescaped_cmd = re.sub(r'\}\}', '}', unescaped_cmd)
 
         logger.info(f"{unescaped_cmd}")
 
@@ -302,7 +327,7 @@ class SSHConnection:
 
     @staticmethod
     def create_connection_key(host, user, port):
-        return host + "@" + user + ":" + str(port)
+        return user + "@" + host + ":" + str(port)
 
     def get_connection_key(self):
         return self.__connection_key
@@ -310,6 +335,35 @@ class SSHConnection:
 class SSHConnectionCache():
 
     __instance = None
+
+    def find_or_create_connection(self,
+        host,
+        user,
+        port = 22,
+        password = "",
+        key_filename = [],
+        jumphost = None,
+        passphrase = None):
+        connection_key = SSHConnection.create_connection_key(host,user,port)
+        connection = self.__SSHConnections.get(connection_key)
+
+        if not connection:
+            logger.info(f"Creating new connection to the {connection_key}")
+
+            if key_filename:
+                logger.info(f"Used SSH keys are: " + str(key_filename))
+
+            if jumphost:
+                logger.info("Used jumphost is: " + str(jumphost))
+
+            connection = SSHConnection(host, user, port, password=password,
+                key_filename=key_filename, jumphost=jumphost, passphrase=passphrase)
+            self.__SSHConnections[connection_key] = connection
+        else:
+            logger.info(f"Using cached connection to the {connection.get_connection_key()}")
+
+        return connection
+
 
     @staticmethod
     def getInstance():
@@ -326,20 +380,14 @@ class SSHConnectionCache():
                      user,
                      port,
                      password= "",
-                     key_filename = "",
+                     key_filename = [],
                      timeout = 0,
                      substitute_params = True,
                      exec_mode = ExecutionMode.COLLECT_DATA,
-                     params = {}):
-        connection_key = SSHConnection.create_connection_key(host,user,port)
-        connection = self.__SSHConnections.get(connection_key)
-
-        if not connection:
-            logger.info(f"Creating new connection to the {SSHConnection.create_connection_key(host, user, port)}")
-            connection = SSHConnection(host, user, port, password=password, key_filename=key_filename)
-            self.__SSHConnections[connection_key] = connection
-        else:
-            logger.info(f"Using cached connection to the {connection.get_connection_key()}")
+                     params = {},
+                     jumphost = None,
+                     passphrase = None):
+        connection = self.find_or_create_connection(host, user, port, password, key_filename, jumphost, passphrase)
 
         return connection.exec_command(cmd,
                                        timeout,
@@ -403,7 +451,7 @@ class SubprocessCommandOutput:
                     if sys.stdin in r:
 
                         x = os.read(sys.stdin.fileno(), 10240)
-
+                        #logger.info("x - " + str(x) + ";")
                         if len(x) == 0:
                             break
 
@@ -487,6 +535,7 @@ class SubprocessCommandOutput:
                     if sys.stdin in r:
 
                         x = os.read(sys.stdin.fileno(), 10240)
+                        #logger.info("x - " + str(x) + ";")
                         if len(x) == 0:
                             break
 
@@ -643,11 +692,20 @@ class Environment:
     def __init__(self):
         self.__variables = {}
 
+    def deleteVariableValue(self, key):
+        self.__variables.pop(key, None)
+
     def setVariableValue(self, key, value):
         self.__variables[key] = value
 
-    def getVariableValue(self, key):
-        return self.__variables.get(key)
+    def getVariableValue(self, key, default_value = None):
+        if default_value:
+            if self.__variables.has(key):
+                return self.__variables.get(key)
+            else:
+                return default_value
+        else:
+            return self.__variables.get(key)
 
     def getVariables(self):
         return self.__variables
@@ -681,11 +739,14 @@ class Task:
         return param_name in self.__environment.getVariables() \
             and self.__environment.getVariableValue(param_name)
 
-    def get_environment_param(self, param_name):
-        return self.__environment.getVariableValue(param_name)
+    def get_environment_param(self, param_name, default_value = None):
+        return self.__environment.getVariableValue(param_name, default_value = None)
 
     def set_environment_param(self, param_name, param_value):
         return self.__environment.setVariableValue(param_name, param_value)
+
+    def delete_environment_param(self, param_name):
+        return self.__environment.deleteVariableValue(param_name)
 
     def execute(self):
         pass
@@ -738,7 +799,7 @@ class Task:
                         timeout = 0,
                         substitute_params = True,
                         shell = True,
-                        exec_mode = ExecutionMode.INTERACTIVE,
+                        exec_mode = ExecutionMode.COLLECT_DATA,
                         communication_mode = CommunicationMode.USE_PTY):
         process = Subprocess()
         command_output = process.exec_subprocess(cmd,
@@ -759,14 +820,16 @@ class Task:
                              user,
                              port = 22,
                              password = "",
-                             key_filename = "",
+                             key_filename = [],
                              timeout = 0,
                              expected_return_codes = [0],
                              substitute_params = True,
-                             exec_mode = ExecutionMode.INTERACTIVE):
+                             exec_mode = ExecutionMode.COLLECT_DATA,
+                             jumphost = None,
+                             passphrase = None):
         command_output = self.__ssh_connection_cache.exec_command(cmd, host, user, port,
             password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
-            exec_mode = exec_mode, params = self.__dict__)
+            exec_mode = exec_mode, params = self.__dict__, jumphost = jumphost, passphrase = passphrase)
 
         if not command_output.exit_code in expected_return_codes:
             raise Exception(f"SSH command should succeed! Expected return codes are: '{expected_return_codes}'. "
@@ -783,13 +846,15 @@ class Task:
                      user,
                      port = 22,
                      password = "",
-                     key_filename = "",
+                     key_filename = [],
                      timeout = 0,
                      substitute_params = True,
-                     exec_mode = ExecutionMode.INTERACTIVE):
+                     exec_mode = ExecutionMode.COLLECT_DATA,
+                     jumphost = None,
+                     passphrase = None):
         command_output = self.__ssh_connection_cache.exec_command(cmd, host, user, port,
             password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
-            exec_mode = exec_mode, params = self.__dict__)
+            exec_mode = exec_mode, params = self.__dict__, jumphost = jumphost, passphrase = passphrase)
 
         return command_output
 
@@ -819,7 +884,7 @@ class Task:
         return "echo " + f"\"{file_content}\"" + " > " + f"{file_path}"
 
     def _get_file_marker_content_command(self, file_path):
-        return f"cat {file_path} || echo \"Requested file marker not accessible\""
+        return f"[ -f {file_path} ] && cat {file_path}"
 
     def _wrap_command_with_file_marker_condition(self, file_path, cmd, expected_value):
         result = f"MARKER_FILE_CONTENT=$$({self._get_file_marker_content_command(file_path)}); if [ \"$$MARKER_FILE_CONTENT\" != \"{expected_value}\" ]; "\
@@ -857,20 +922,20 @@ class SSHLocalClient(Task):
 
 class Scenario:
     def __init__(self):
-        self.__phases = {}
+        self.__phases = []
 
     def add_phase(self, phase_name, conditions):
-        self.__phases[phase_name] = conditions
+        self.__phases.append((phase_name, conditions))
 
     def get_phases(self):
         return self.__phases
 
 class Phase:
     def __init__(self):
-        self.__tasks = {}
+        self.__tasks = []
 
     def add_task(self, task_name, conditions):
-        self.__tasks[task_name] = conditions
+        self.__tasks.append((task_name, conditions))
 
     def get_tasks(self):
         return self.__tasks
@@ -893,10 +958,8 @@ class ExecutionElement:
 class ExecutionContext:
     def __init__(self, log_dir = None):
         self.__execution_elements = []
-        self.__available_tasks = []
         self.__available_phases = {}
         self.__available_scenarios = {}
-        self.__import_module_search_paths = []
         self.__imported_modules = {}
 
         os.makedirs(log_dir, exist_ok=True)
@@ -948,13 +1011,13 @@ class ExecutionContext:
         phase = self.__available_phases.get(phase_name)
         if phase:
             tasks = phase.get_tasks()
-            for task_name in tasks:
-                if self.__check_conditions(tasks[task_name], environment):
-                    logger.info(f"Execution context: start execution of the phase '{phase_name}'")
+            logger.info(f"Execution context: start execution of the phase '{phase_name}'")
+            for task_name, condition in tasks:
+                if self.__check_conditions(condition, environment):
                     self.__execute_task(task_name, environment)
-                    logger.info(f"Execution context: execution of the phase '{phase_name}' was finished")
                 else:
                     logger.warning(f"Skip execution of the task '{task_name}'.")
+            logger.info(f"Execution context: execution of the phase '{phase_name}' was finished")
         else:
             raise Exception(f"Phase '{phase_name}' was not found!")
 
@@ -964,8 +1027,8 @@ class ExecutionContext:
         if scenario:
             phases = scenario.get_phases()
             logger.info(f"Execution context: start execution of the phase '{scenario_name}'")
-            for phase_name in phases:
-                if self.__check_conditions(phases[phase_name], environment):
+            for phase_name, condition in phases:
+                if self.__check_conditions(condition, environment):
                     self.__execute_phase(phase_name, environment)
                 else:
                     logger.warning(f"Skip execution of the phase '{phase_name}'.")

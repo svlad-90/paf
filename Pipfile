@@ -4,8 +4,8 @@ verify_ssl = true
 name = "pypi"
 
 [packages] # Here goes your package requirements for running the application and its versions (which packages you will use when running the application).
-paramiko = "*"
-coloredlogs = "*"
+paramiko = ">=3.0.0"
+coloredlogs = ">=15.0.1"
 
 [dev-packages] # Here goes your package requirements for developing the application and its versions (which packages you will use when developing the application)
 
