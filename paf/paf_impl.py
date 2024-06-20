@@ -28,11 +28,18 @@ import pty
 
 class logger:
     __log_dir = None
+    log_filepath = None
     __logging = logging.getLogger(__name__)
     __logging_to_file = None
     __print_to_file = False
     __messageFormat = "%(asctime)s,%(msecs)03d %(levelname)s %(message)s"
     __simpleFormat = '%(message)s'
+
+    @staticmethod
+    def __generate_log_filepath():
+        now = datetime.now()
+        date_time = now.strftime("%m_%d_%Y_%H_%M_%S")
+        return os.path.join(logger.__log_dir, f"paf_{date_time}.log")
 
     @staticmethod
     def init():
@@ -44,11 +51,9 @@ class logger:
                 logger.__logging_to_file = logging.getLogger(__name__ + "_to_file")
                 logger.__logging_to_file.propagate  = False
 
-                now = datetime.now()
-                date_time = now.strftime("%m_%d_%Y_%H_%M_%S")
-                full_file_path = os.path.join(logger.__log_dir, f"paf_{date_time}.log")
+                logger.log_filepath = logger.__generate_log_filepath()
 
-                file_handler = logging.FileHandler(full_file_path, mode = "w")
+                file_handler = logging.FileHandler(logger.log_filepath, mode = "w")
                 file_handler.setLevel(logging.INFO)
                 formatter = logging.Formatter(logger.__messageFormat)
                 file_handler.setFormatter(formatter)
@@ -395,6 +400,18 @@ class SSHConnectionCache():
                                        exec_mode = exec_mode,
                                        params = params)
 
+def set_tty_mode(fd, when=termios.TCSAFLUSH):
+    """Put terminal into a raw mode."""
+    mode = tty.tcgetattr(fd)
+    mode[tty.IFLAG] = mode[tty.IFLAG] & ~(tty.BRKINT | tty.ICRNL | tty.INPCK | tty.ISTRIP | tty.IXON)
+    mode[tty.OFLAG] = mode[tty.OFLAG] & ~(tty.OPOST)
+    mode[tty.CFLAG] = mode[tty.CFLAG] & ~(tty.CSIZE | tty.PARENB)
+    mode[tty.CFLAG] = mode[tty.CFLAG] | tty.CS8
+    mode[tty.LFLAG] = mode[tty.LFLAG] & ~(tty.ECHO | tty.ICANON | tty.IEXTEN | tty.ISIG)
+    mode[tty.CC][tty.VMIN] = 1
+    mode[tty.CC][tty.VTIME] = 0
+    tty.tcsetattr(fd, when, mode)
+
 class SubprocessCommandOutput:
     def __init__(self, exec_mode, sub_process, timeout, communication_mode, master_fd):
         self.stdout = ""
@@ -406,8 +423,7 @@ class SubprocessCommandOutput:
 
         try:
             if common.isatty(sys.stdin):
-                tty.setraw(sys.stdin.fileno())
-                tty.setcbreak(sys.stdin.fileno())
+                set_tty_mode(sys.stdin.fileno())
 
             if communication_mode == CommunicationMode.USE_PTY:
 
@@ -451,11 +467,13 @@ class SubprocessCommandOutput:
                     if sys.stdin in r:
 
                         x = os.read(sys.stdin.fileno(), 10240)
-                        #logger.info("x - " + str(x) + ";")
+                        #logger.info("x - " + str(x) + ";\r")
                         if len(x) == 0:
                             break
 
                         if x == b'\x03':
+                            os.write(master_fd, x)
+                            sub_process.wait(1.0)
                             raise KeyboardInterrupt()
 
                         os.write(master_fd, x)
@@ -535,11 +553,14 @@ class SubprocessCommandOutput:
                     if sys.stdin in r:
 
                         x = os.read(sys.stdin.fileno(), 10240)
-                        #logger.info("x - " + str(x) + ";")
+                        #logger.info("x - " + str(x) + ";\r")
                         if len(x) == 0:
                             break
 
                         if x == b'\x03':
+                            sub_process.stdin.write(x)
+                            sub_process.stdin.flush()
+                            sub_process.wait(1.0)
                             raise KeyboardInterrupt()
 
                         sub_process.stdin.write(x)
@@ -748,6 +769,9 @@ class Task:
     def delete_environment_param(self, param_name):
         return self.__environment.deleteVariableValue(param_name)
 
+    def init(self):
+        pass
+
     def execute(self):
         pass
 
@@ -761,6 +785,7 @@ class Task:
         logger.info(f"Starting the task '{self.__name}'. Used environment:");
         self.__environment.dump()
 
+        self.init()
         self.execute()
 
         logger.info(f"Finished the task '{self.__name}'.");
@@ -989,13 +1014,13 @@ class ExecutionContext:
 
             if environment_variable_value:
                 if environment_variable_value == conditions[condition_name]:
-                    logger.info(f"Condition met: {condition_name}={environment_variable_value}")
+                    logger.info(f"Condition met: '{condition_name} = {environment_variable_value}'")
                 else:
-                    logger.info(f"Condition NOT met: {condition_name}={conditions[condition_name]}. "
-                                 "Actual value = {environment_variable_value}")
+                    logger.info(f"Condition NOT met: '{condition_name} = {conditions[condition_name]}'. "
+                                f"Actual value: '{environment_variable_value}'")
                     result = False
             else:
-                logger.info(f"Condition NOT met: {condition_name}={conditions[condition_name]}. "
+                logger.info(f"Condition NOT met: '{condition_name} = {conditions[condition_name]}'. "
                                  "Parameter does not exist in the environment.")
                 result = False
 
@@ -1026,7 +1051,7 @@ class ExecutionContext:
         scenario = self.__available_scenarios.get(scenario_name)
         if scenario:
             phases = scenario.get_phases()
-            logger.info(f"Execution context: start execution of the phase '{scenario_name}'")
+            logger.info(f"Execution context: start execution of the scenario '{scenario_name}'")
             for phase_name, condition in phases:
                 if self.__check_conditions(condition, environment):
                     self.__execute_phase(phase_name, environment)

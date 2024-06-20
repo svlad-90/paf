@@ -121,7 +121,7 @@ def load_all_modules_in_dir(module_root_dir):
             if loaded_module:
                 result[loaded_module_name] = loaded_module
 
-    for file in os.listdir(module_root_dir):
+    for file in sorted(os.listdir(module_root_dir)):
         d = os.path.join(module_root_dir, file)
         if os.path.isdir(d) and d != os.path.join(module_root_dir, "__pycache__"):
             result.update(load_all_modules_in_dir(d))
