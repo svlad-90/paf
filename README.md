@@ -101,6 +101,7 @@ class echo_test(SSHLocalClient):
 As you can see, your task is a simple python class, which inherits from the framework's base classes. The requirements for such a class are rather simple:
 
 - It should inherit from `paf.paf_impl` - A task or one of its sub-classes ( e.g. paf_impl.SSHLocalClient )
+- It optionally can declare and implement the `init` method with no parameters. The framework uses this method to initialize the task before calling 'execute'.
 - It should declare and implement the `execute` method with no parameters. This method is used by the framework to start the execution of your task
 - Such a class should implement the `__init__` method, which should:
   - Call the super's init method
@@ -118,44 +119,49 @@ The API of the paf_impl.Task, which should be used by the developer of the scena
 
 ----
 
-`subprocess_must_succeed(cmd, timeout = 0, expected_return_codes = [0], substitute_params = True, shell = True, exec_mode = ExecutionMode.COLLECT_DATA, communication_mode = CommunicationMode.PIPE_OUTPUT)`
+- subprocess_must_succeed(**cmd**, **timeout** = 0, **expected_return_codes** = [0], **substitute_params** = True, **shell** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **communication_mode** = CommunicationMode.PIPE_OUTPUT, **avoid_printing_command** = False, **avoid_printing_command_reason** = "The command contains a sensitive information", **avoid_printing_command_output** = False, **avoid_printing_command_output_reason** = "The command output contains a sensitive information")
 
-This method executes a single command as a sub-process. The purpose of this method is to intentionally fail in case of error.
+  This method executes a single command as a sub-process. The purpose of this method is to intentionally fail in case of error.
 
-**Parameters:**
+  **Parameters:**
 
-- `cmd` - the command that will be executed. Might be provided in one of the following forms:
-  - if the "shell" parameter is equal to True, the `cmd` parameter can be provided in the form of a string or a list.
-  Examples:
-    - `self.subprocess_must_succeed("echo 123", shell=True)`
-    - `self.subprocess_must_succeed(["echo", "123"], shell=True)`
-  - if the "shell" parameter is equal to False, the `cmd` parameter can be provided in the form of a string. Example:
+  - `cmd` - the command that will be executed. Might be provided in one of the following forms:
+    - if the "shell" parameter is equal to True, the `cmd` parameter can be provided in the form of a string or a list.
+    Examples:
+      - `self.subprocess_must_succeed("echo 123", shell=True)`
+      - `self.subprocess_must_succeed(["echo", "123"], shell=True)`
+    - if the "shell" parameter is equal to False, the `cmd` parameter can be provided in the form of a string. Example:
+      - `self.subprocess_must_succeed("echo 123", shell=False)`
+      - In this case, providing a list will raise an exception, as it is quite hard to split a complex bash string into a set of arguments.
+  - `timeout` - expected duration of the command in seconds. If exceeded, the exception is raised. Currently, this parameter **is ignored** in this call. To be done.
+  - `expected_return_codes` - list of the expected returned codes. By default, contains only a 0 return code. In case if returned code of the cmd is not found in this list - an exception is raised.
+  - `substitute_params` - whether parameters of `cmd` shall be substituted. If set to `true`, the bash-like parameters substitution will take place. The parameters which take part in substitution are:
+    - parameters which are passed from the command line
+    - parameters, which are parsed from the XML configuration file
+    - parameters, which are injected into the execution environment by the other tasks
+    - the fields of the class, which are contained in `self.__dict__` collection
+  - `shell` - if this parameter is equal to True, the `/bin/bash` sub-shell will be created to execute the command. Only in this mode, the `cmd` could be a bash script with pipes, variables, logical operators, etc. Otherwise, the `cmd` must contain a call to one executable with its parameters. Examples:
+    - `self.subprocess_must_succeed("cd ~/ && echo "Hello, world!" > ./new_file.txt && cat ./new_file.txt", shell=True)`
     - `self.subprocess_must_succeed("echo 123", shell=False)`
-    - In this case, providing a list will raise an exception, as it is quite hard to split a complex bash string into a set of arguments.
-- `timeout` - expected duration of the command in seconds. If exceeded, the exception is raised. Currently, this parameter **is ignored** in this call. To be done.
-- `expected_return_codes` - list of the expected returned codes. By default, contains only a 0 return code. In case if returned code of the cmd is not found in this list - an exception is raised.
-- `substitute_params` - whether parameters of `cmd` shall be substituted. If set to `true`, the bash-like parameters substitution will take place. The parameters which take part in substitution are:
-  - parameters which are passed from the command line
-  - parameters, which are parsed from the XML configuration file
-  - parameters, which are injected into the execution environment by the other tasks
-  - the fields of the class, which are contained in `self.__dict__` collection
-- `shell` - if this parameter is equal to True, the `/bin/bash` sub-shell will be created to execute the command. Only in this mode, the `cmd` could be a bash script with pipes, variables, logical operators, etc. Otherwise, the `cmd` must contain a call to one executable with its parameters. Examples:
-  - `self.subprocess_must_succeed("cd ~/ && echo "Hello, world!" > ./new_file.txt && cat ./new_file.txt", shell=True)`
-  - `self.subprocess_must_succeed("echo 123", shell=False)`
-  - `self.subprocess_must_succeed(["echo", "123"], shell=False)`
-  - **Note!** In the case of shell mode (`shell=True`), the command will be executed in a subshell that will not receive certain signals from the OS. E.g. the interactive console application will not react to the change in the terminal size. The PAF framework tries to minimize such side effects. E.g. we modify the environment of a running process so that it contains the size of the terminal once you start the sub-process. Still, you might face some side effects. To avoid them - try to use `shell=False` for interactive applications.
-- `exec_mode` - execution mode. Might contain one of the following values:
-  - `ExecutionMode.COLLECT_DATA` - will print data to the terminals `stdout`. Will process stdin. Will collect `stdout` and provide it back to the caller so that the data could be parsed by the calling code
-  - `ExecutionMode.INTERACTIVE` - will print data to the terminals `stdout`. Will process `stdin`. Will **NOT** collect stdout. The returned output will be an empty string.
-  - `ExecutionMode.DEV_NULL` - will **NOT** print data to the terminals `stdout`. Will process `stdin`. Will **NOT** collect `stdout`. The returned output will be an empty string.
-  - **Note!** Be aware that in case of usage of the `communication_mode = CommunicationMode.USE_PTY` output on `stderr` and `stdout` will be mixed inside the returned output string. There is no way to distinguish between them.
-- `communication_mode` - specifies one of the supported communication modes. Can take one of the following values:
-  - `CommunicationMode.USE_PTY` - will redirect the output to a `pseudo-terminal pair`. The executed sub-process will think, that it is executed **inside a tty**. Some applications, e.g. Android repo tool will print progress only in such a mode and will omit it in CommunicationMode.PIPE_OUTPUT.
-  - `CommunicationMode.PIPE_OUTPUT` - will pipe all output **without** the usage of the additional PTY. The executed sub-process will think, that it is **NOT running in a tty**. Some applications, e.g. make, will not send console escape sequences in such a case. In this mode, the output would be a build log, which you can put into a file. The one, where each next directive will not "overwrite" the previous one.
+    - `self.subprocess_must_succeed(["echo", "123"], shell=False)`
+    - **Note!** In the case of shell mode (`shell=True`), the command will be executed in a subshell that will not receive certain signals from the OS. E.g. the interactive console application will not react to the change in the terminal size. The PAF framework tries to minimize such side effects. E.g. we modify the environment of a running process so that it contains the size of the terminal once you start the sub-process. Still, you might face some side effects. To avoid them - try to use `shell=False` for interactive applications.
+  - `exec_mode` - execution mode. Might contain one of the following values:
+    - `ExecutionMode.COLLECT_DATA` - will print data to the terminals `stdout`. Will process stdin. Will collect `stdout` and provide it back to the caller so that the data could be parsed by the calling code
+    - `ExecutionMode.INTERACTIVE` - will print data to the terminals `stdout`. Will process `stdin`. Will **NOT** collect stdout. The returned output will be an empty string.
+    - `ExecutionMode.DEV_NULL` - will **NOT** print data to the terminals `stdout`. Will process `stdin`. Will **NOT** collect `stdout`. The returned output will be an empty string.
+    - **Note!** Be aware that in case of usage of the `communication_mode = CommunicationMode.USE_PTY` output on `stderr` and `stdout` will be mixed inside the returned output string. There is no way to distinguish between them.
+  - `communication_mode` - specifies one of the supported communication modes. Can take one of the following values:
+    - `CommunicationMode.USE_PTY` - will redirect the output to a `pseudo-terminal pair`. The executed sub-process will think, that it is executed **inside a tty**. Some applications, e.g. Android repo tool will print progress only in such a mode and will omit it in CommunicationMode.PIPE_OUTPUT.
+    - `CommunicationMode.PIPE_OUTPUT` - will pipe all output **without** the usage of the additional PTY. The executed sub-process will think, that it is **NOT running in a tty**. Some applications, e.g. make, will not send console escape sequences in such a case. In this mode, the output would be a build log, which you can put into a file. The one, where each next directive will not "overwrite" the previous one.
+  - **avoid_printing_command** - this parameter avoids printing the command itself to the console and the log file
+  - **avoid_printing_command_reason** - this parameter specifies what to print instead of the command if 'avoid_printing_command' is set to True.
+  - **avoid_printing_command_output** - this parameter avoids printing the command output to the console and the log file
+  - **avoid_printing_command_output_reason** - this parameter specifies what to print instead of the command's output if 'avoid_printing_command_output' is set to True. **Note!** This string will be printed again instead of every string of the command's output.
 
-**Return value:** Output of `cmd` parameter as a string.
+  **Return value:**
+  Output of `cmd` parameter as a string.
 
-- **exec_subprocess**(**cmd**, **timeout** = 0, **substitute_params** = True, **shell** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **communication_mode** = CommunicationMode.PIPE_OUTPUT)
+- **exec_subprocess**(**cmd**, **timeout** = 0, **substitute_params** = True, **shell** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **communication_mode** = CommunicationMode.PIPE_OUTPUT, **avoid_printing_command** = False, **avoid_printing_command_reason** = "The command contains a sensitive information", **avoid_printing_command_output** = False, **avoid_printing_command_output_reason** = "The command output contains a sensitive information")
 
   This method executes a single command as a sub-process. The purpose of this method is to return all details to the client even in case of command failure.
 
@@ -187,6 +193,10 @@ This method executes a single command as a sub-process. The purpose of this meth
   - **communication_mode** - specifies one of the supported communication modes. Can take one of the following values:
     - CommunicationMode.USE_PTY - will redirect output to a **pseudo-terminal pair**. The executed sub-process will think, that it is executed **inside a tty**. Some applications, e.g. Android repo tool will print progress only in such a mode and will omit it in CommunicationMode.PIPE_OUTPUT.
     - CommunicationMode.PIPE_OUTPUT - will pipe all output **without** the usage of the additional PTY. The executed sub-process will think, that it is **NOT running in a tty**. Some applications, e.g. make, will not send console escape sequences in such a case. In this mode, the output would be a build log, which you can put into a file. The one, where each next directive will not "overwrite" the previous one.
+  - **avoid_printing_command** - this parameter avoids printing the command itself to the console and the log file
+  - **avoid_printing_command_reason** - this parameter specifies what to print instead of the command if 'avoid_printing_command' is set to True.
+  - **avoid_printing_command_output** - this parameter avoids printing the command output to the console and the log file
+  - **avoid_printing_command_output_reason** - this parameter specifies what to print instead of the command's output if 'avoid_printing_command_output' is set to True. **Note!** This string will be printed again instead of every string of the command's output.
 
   **Returns:**
   An instance of the paf_impl.SubprocessCommandOutput class, which contains the following fields:
@@ -194,7 +204,7 @@ This method executes a single command as a sub-process. The purpose of this meth
   - stderr - the content of stderr stream as a string
   - exit_code - exit code of the command
 
-- **ssh_command_must_succeed**(**cmd**, **host**, **user**, **port** = 22, **password** = "", **key_filename** = "", **timeout** = 0, **expected_return_codes** = [0], **substitute_params** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **jumphost** = None, **passphrase** = None)
+- **ssh_command_must_succeed**(**cmd**, **host**, **user**, **port** = 22, **password** = "", **key_filename** = "", **timeout** = 0, **expected_return_codes** = [0], **substitute_params** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, **jumphost** = None, **passphrase** = None, **avoid_printing_command** = False, **avoid_printing_command_reason** = "The command contains a sensitive information", **avoid_printing_command_output** = False, **avoid_printing_command_output_reason** = "The command output contains a sensitive information")
 
   This method executes a single command on side of the SSH server. The purpose of this method is to intentionally fail in case of error.
 
@@ -218,11 +228,15 @@ This method executes a single command as a sub-process. The purpose of this meth
     - **ExecutionMode.DEV_NULL** - will **NOT** print data to the terminal's stdout. Will process stdin. Will **NOT** collect stdout. The returned output will be an empty string.
   - **jumphost** - an instance of the SSHConnection, which should be used as a proxy to connect to the target system. Can be created, or fetched by calling the  SSHConnectionCache.getInstance().find_or_create_connection(...).
   - **passphrase** - Passphrase, which should be used to read the private SSH keys.
+  - **avoid_printing_command** - this parameter avoids printing the command itself to the console and the log file
+  - **avoid_printing_command_reason** - this parameter specifies what to print instead of the command if 'avoid_printing_command' is set to True.
+  - **avoid_printing_command_output** - this parameter avoids printing the command output to the console and the log file
+  - **avoid_printing_command_output_reason** - this parameter specifies what to print instead of the command's output if 'avoid_printing_command_output' is set to True. **Note!** This string will be printed again instead of every string of the command's output.
 
   **Returns:**
   Command output as a string.
 
-- **exec_ssh_command**(**cmd**, **host**, **user**, **port** = 22, **password** = "", **key_filename** = "", **timeout** = 0, **substitute_params** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, jumphost = None, **passphrase** = None)
+- **exec_ssh_command**(**cmd**, **host**, **user**, **port** = 22, **password** = "", **key_filename** = "", **timeout** = 0, **substitute_params** = True, **exec_mode** = ExecutionMode.COLLECT_DATA, jumphost = None, **passphrase** = None, **avoid_printing_command** = False, **avoid_printing_command_reason** = "The command contains a sensitive information", **avoid_printing_command_output** = False, **avoid_printing_command_output_reason** = "The command output contains a sensitive information")
 
   This method executes a single command on side of the SSH server. The purpose of this method is to return all details to the client even in case of command failure.
 
@@ -245,6 +259,10 @@ This method executes a single command as a sub-process. The purpose of this meth
     - **ExecutionMode.DEV_NULL** - will **NOT** print data to the terminal's stdout. Will process stdin. Will **NOT** collect stdout and stderr. The returned output will be empty strings.
   - **jumphost** - an instance of the SSHConnection, which should be used as a proxy to connect to the target system. Can be created, or fetched by calling the  SSHConnectionCache.getInstance().find_or_create_connection(...).
   - **passphrase** - Passphrase, which should be used to read the private SSH keys.
+  - **avoid_printing_command** - this parameter avoids printing the command itself to the console and the log file
+  - **avoid_printing_command_reason** - this parameter specifies what to print instead of the command if 'avoid_printing_command' is set to True.
+  - **avoid_printing_command_output** - this parameter avoids printing the command output to the console and the log file
+  - **avoid_printing_command_output_reason** - this parameter specifies what to print instead of the command's output if 'avoid_printing_command_output' is set to True. **Note!** This string will be printed again instead of every string of the command's output.
 
   **Returns:**
   An instance of the paf_impl.SSHCommandOutput class, which contains the following fields:

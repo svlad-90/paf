@@ -46,6 +46,7 @@ class uboot_sync(UbootDeploymentTask):
         self.subprocess_must_succeed(f"cd {self.SOURCE_PATH} && "
             f"( if [ ! -d .git ]; then rm -rf {self.SOURCE_PATH}; fi; )")
         self.subprocess_must_succeed("( cd ${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE} && "
+            "export GIT_SSH_COMMAND=\"ssh -o StrictHostKeyChecking=accept-new\" && "
             "git clone -b ${UBOOT_VERSION} ${UBOOT_GIT_REFERENCE} " + self.SOURCE_PATH + ") && "
            f"( cd {self.SOURCE_PATH} && " +
             "git checkout tags/${UBOOT_VERSION} -b ${UBOOT_VERSION} ) || :")

@@ -50,6 +50,7 @@ class linux_kernel_sync(LinuxKernelDeploymentTask):
         self.subprocess_must_succeed(f"cd {self.SOURCE_PATH} && "
             f"( if [ ! -d .git ]; then rm -rf {self.SOURCE_PATH}; fi; )")
         self.subprocess_must_succeed("( cd ${ROOT}/${LINUX_DEPLOYMENT_DIR}/${SOURCE_DIR}/${ARCH_TYPE} && "
+            "export GIT_SSH_COMMAND=\"ssh -o StrictHostKeyChecking=accept-new\" && "
             "git clone -b ${LINUX_KERNEL_VERSION} ${LINUX_KERNEL_GIT_REFERENCE} " + self.SOURCE_PATH + " ) && "
             f"( cd {self.SOURCE_PATH} && " +
             "git checkout tags/${LINUX_KERNEL_VERSION} -b ${LINUX_KERNEL_VERSION} ) || :")

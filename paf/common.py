@@ -11,7 +11,6 @@ import fcntl
 import struct
 import termios
 import glob
-import imp
 
 def has_fileno(stream):
     """
@@ -85,7 +84,9 @@ def load_module(absolute_path):
     import importlib.util
     module_name, _ = os.path.splitext(os.path.split(absolute_path)[-1])
     try:
-        py_mod = imp.load_source(module_name, absolute_path)
+        spec = importlib.util.spec_from_file_location(module_name, absolute_path)
+        py_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(py_mod)
     except ImportError as e:
         if "No module named" not in e.msg:
             raise e
@@ -98,9 +99,6 @@ def load_module(absolute_path):
             raise ImportError(msg.format(missing_module, module_root))
 
         print("Could not directly load module, including dir: {}".format(module_root))
-        spec = importlib.util.spec_from_file_location(module_name, absolute_path)
-        py_mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(py_mod)
     return module_name, py_mod
 
 def load_all_modules_in_dir(module_root_dir):
