@@ -1,0 +1,13 @@
+<paf_config>
+    <phase name="InstallDockerPhase">
+        <task name="my_scenarios.test_task.InstallDocker"/>
+    </phase>
+    <phase name="RunHelloWorld">
+        <task name="my_scenarios.test_task.RunHelloWorld"/>
+    </phase>
+    <scenario name="DockerInstallationAndHelloWorld">
+        <phase name="InstallDockerPhase"/>
+        <phase name="RunHelloWorld"/>
+    </scenario>
+</paf_config>
+
