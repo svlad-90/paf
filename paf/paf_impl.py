@@ -123,19 +123,53 @@ class logger:
             logger.__logging_to_file.error(msg, *args, **kwargs)
 
 class ExecutionMode(enum.Enum):
-    INTERACTIVE  = 0 # print but do not collect stdin and stderr
+    PRINT        = 0 # print but do not collect stdout and stderr
     COLLECT_DATA = 1 # print and collect stdin and stderr
     DEV_NULL     = 2 # ignore any output
+
+class InteractionMode(enum.Enum):
+    PROCESS_INPUT = 0 # process user input
+    IGNORE_INPUT =  1 # ignore user input
 
 # mainly to be used with shell = True
 class CommunicationMode(enum.Enum):
     USE_PTY = 0 # redirect output to pseudo-terminal pair. The executed sub-process will think, that it is executed in tty
     PIPE_OUTPUT = 1 # pipe all output without usage of the additional PTY. The executed sub-process will think, that it is NOT running in tty
 
+class Config:
+    __DEFAULT_EXECUTION_MODE = ExecutionMode.COLLECT_DATA
+    __DEFAULT_INTERACTION_MODE = InteractionMode.PROCESS_INPUT
+    __DEFAULT_COMMUNICATION_MODE = CommunicationMode.USE_PTY
+
+    @staticmethod
+    def set_default_execution_mode(val):
+        Config.__DEFAULT_EXECUTION_MODE = val
+
+    @staticmethod
+    def get_default_execution_mode():
+        return Config.__DEFAULT_EXECUTION_MODE
+
+    @staticmethod
+    def set_default_interaction_mode(val):
+        Config.__DEFAULT_INTERACTION_MODE = val
+
+    @staticmethod
+    def get_default_interaction_mode():
+        return Config.__DEFAULT_INTERACTION_MODE
+
+    @staticmethod
+    def set_default_communication_mode(val):
+        Config.__DEFAULT_COMMUNICATION_MODE = val
+
+    @staticmethod
+    def get_default_communication_mode():
+        return Config.__DEFAULT_COMMUNICATION_MODE
+
 class SSHCommandOutput:
     def __init__(self, exec_mode, stdin, stdout, stderr,
                  avoid_printing_command_output,
-                 avoid_printing_command_output_reason):
+                 avoid_printing_command_output_reason,
+                 interaction_mode):
         self.stdout = ""
         self.stderr = ""
 
@@ -168,7 +202,7 @@ class SSHCommandOutput:
                             if chan.recv_ready():
                                 output = stdout.read(nbytes)
 
-                                if exec_mode == ExecutionMode.INTERACTIVE\
+                                if exec_mode == ExecutionMode.PRINT\
                                 or exec_mode == ExecutionMode.COLLECT_DATA:
 
                                     if not avoid_printing_command_output:
@@ -201,7 +235,7 @@ class SSHCommandOutput:
                             if chan.recv_stderr_ready():
                                 error = stderr.read(nbytes)
 
-                                if exec_mode == ExecutionMode.INTERACTIVE\
+                                if exec_mode == ExecutionMode.PRINT\
                                 or exec_mode == ExecutionMode.COLLECT_DATA:
 
                                     decoded_error = error.decode(encoding='utf-8', errors='ignore')
@@ -236,14 +270,13 @@ class SSHCommandOutput:
                             self.stderr = self.stderr.rstrip("\r\n")
                         break
 
-                if sys.stdin in r:
+                if sys.stdin in r and interaction_mode == InteractionMode.PROCESS_INPUT:
                     bytes_to_read = common.bytes_to_read(sys.stdin)
                     x = sys.stdin.read(bytes_to_read)
                     if len(x) == 0:
                         break
                     stdin.write(x)
                     stdin.flush()
-
         finally:
             if common.isatty(sys.stdin):
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
@@ -301,12 +334,19 @@ class SSHConnection:
                      cmd,
                      timeout = 0,
                      substitute_params = True,
-                     exec_mode = ExecutionMode.COLLECT_DATA,
+                     exec_mode = None,
                      params = {},
                      avoid_printing_command = False,
                      avoid_printing_command_reason = "The command contains a sensitive information",
                      avoid_printing_command_output = False,
-                     avoid_printing_command_output_reason = "The command output contains a sensitive information"):
+                     avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                     interaction_mode = None):
+
+        if exec_mode == None:
+            exec_mode = Config.get_default_execution_mode()
+
+        if interaction_mode == None:
+            interaction_mode = Config.get_default_interaction_mode()
 
         logger.info("-------------------------------------")
 
@@ -342,7 +382,8 @@ class SSHConnection:
                                                         terminal_width = terminal_width, terminal_height = terminal_height)
 
             result = SSHCommandOutput(exec_mode, stdin, stdout, stderr,
-                                      avoid_printing_command_output, avoid_printing_command_output_reason)
+                                      avoid_printing_command_output, avoid_printing_command_output_reason,
+                                      interaction_mode)
 
             if result.exit_code == 0:
                 logger.info(f"Command was successfully executed. Returned result code is '{result.exit_code}'")
@@ -413,14 +454,21 @@ class SSHConnectionCache():
                      key_filename = [],
                      timeout = 0,
                      substitute_params = True,
-                     exec_mode = ExecutionMode.COLLECT_DATA,
+                     exec_mode = None,
                      params = {},
                      jumphost = None,
                      passphrase = None,
                      avoid_printing_command = False,
                      avoid_printing_command_reason = "The command contains a sensitive information",
                      avoid_printing_command_output = False,
-                     avoid_printing_command_output_reason = "The command output contains a sensitive information"):
+                     avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                     interaction_mode = None):
+        if exec_mode == None:
+            exec_mode = Config.get_default_execution_mode()
+
+        if interaction_mode == None:
+            interaction_mode = Config.get_default_interaction_mode()
+
         connection = self.find_or_create_connection(host, user, port, password, key_filename, jumphost, passphrase)
 
         return connection.exec_command(cmd,
@@ -431,7 +479,8 @@ class SSHConnectionCache():
                                        avoid_printing_command = avoid_printing_command,
                                        avoid_printing_command_reason = avoid_printing_command_reason,
                                        avoid_printing_command_output = avoid_printing_command_output,
-                                       avoid_printing_command_output_reason = avoid_printing_command_output_reason)
+                                       avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+                                       interaction_mode = interaction_mode)
 
 def set_tty_mode(fd, when=termios.TCSAFLUSH):
     """Put terminal into a raw mode."""
@@ -447,15 +496,20 @@ def set_tty_mode(fd, when=termios.TCSAFLUSH):
 
 class SubprocessCommandOutput:
     def __init__(self, exec_mode, sub_process, timeout, communication_mode, master_fd,
-                 avoid_printing_command_output, avoid_printing_command_output_reason):
+                 avoid_printing_command_output, avoid_printing_command_output_reason,
+                 interaction_mode):
+
         self.stdout = ""
         self.stderr = ""
         self.exit_code = 0
+
+        exit_code = None
 
         if common.isatty(sys.stdin):
             oldtty = termios.tcgetattr(sys.stdin)
 
         try:
+
             if common.isatty(sys.stdin):
                 set_tty_mode(sys.stdin.fileno())
 
@@ -466,15 +520,17 @@ class SubprocessCommandOutput:
                 while True:
 
                     try:
+
                         r, _, e = select.select([master_fd, sys.stdin], [], [], 0.05)
                     except select.error as e:
+
                         if e[0] != errno.EINTR: raise
 
                     if master_fd in r:
 
                         output = os.read(master_fd, 10240)
 
-                        if exec_mode == ExecutionMode.INTERACTIVE\
+                        if exec_mode == ExecutionMode.PRINT\
                         or exec_mode == ExecutionMode.COLLECT_DATA:
 
                             if not avoid_printing_command_output:
@@ -506,10 +562,10 @@ class SubprocessCommandOutput:
                                 if decoded_output and decoded_output != "":
                                     self.stdout=self.stdout + decoded_output
 
-                    if sys.stdin in r:
+                    if sys.stdin in r and interaction_mode == InteractionMode.PROCESS_INPUT:
 
                         x = os.read(sys.stdin.fileno(), 10240)
-                        #logger.info("x - " + str(x) + ";\r")
+                        #logger.info("input x - " + str(x) + ";\r")
                         if len(x) == 0:
                             break
 
@@ -520,7 +576,9 @@ class SubprocessCommandOutput:
 
                         os.write(master_fd, x)
 
-                    if sub_process.poll() is not None:
+                    exit_code = sub_process.poll()
+
+                    if exit_code is not None:
                         break
 
             elif communication_mode == CommunicationMode.PIPE_OUTPUT:
@@ -540,7 +598,7 @@ class SubprocessCommandOutput:
 
                         output = sub_process.stdout.read1()
 
-                        if exec_mode == ExecutionMode.INTERACTIVE\
+                        if exec_mode == ExecutionMode.PRINT\
                         or exec_mode == ExecutionMode.COLLECT_DATA:
 
                             if not avoid_printing_command_output:
@@ -578,7 +636,7 @@ class SubprocessCommandOutput:
 
                         error = sub_process.stderr.read1()
 
-                        if exec_mode == ExecutionMode.INTERACTIVE\
+                        if exec_mode == ExecutionMode.PRINT\
                         or exec_mode == ExecutionMode.COLLECT_DATA:
 
                             if not avoid_printing_command_output:
@@ -610,10 +668,9 @@ class SubprocessCommandOutput:
                                 if decoded_error and decoded_error != "":
                                     self.stderr=self.stderr + decoded_error
 
-                    if sys.stdin in r:
-
+                    if sys.stdin in r and interaction_mode == InteractionMode.PROCESS_INPUT:
                         x = os.read(sys.stdin.fileno(), 10240)
-                        #logger.info("x - " + str(x) + ";\r")
+                        #logger.info("input x - " + str(x) + ";\r")
                         if len(x) == 0:
                             break
 
@@ -626,19 +683,27 @@ class SubprocessCommandOutput:
                         sub_process.stdin.write(x)
                         sub_process.stdin.flush()
 
-                    if sub_process.poll() is not None:
-                        break
+                    exit_code = sub_process.poll()
 
+                    if exit_code is not None:
+                        break
         finally:
             if common.isatty(sys.stdin):
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
-        self.exit_code = sub_process.poll()
+        self.exit_code = exit_code
 
 class Subprocess:
 
     def __init__(self):
         self.subprocess = None
+
+    def __apply_replacements(self, s):
+        """Apply the necessary substitutions to a string containing parameters."""
+        s = re.sub(r'\$\$', '$', s)  # Replace $$ with $
+        s = s.replace('{{', '{')      # Replace {{ with {
+        s = s.replace('}}', '}')      # Replace }} with }
+        return s
 
     def exec_subprocess(self,
                         cmd,
@@ -653,7 +718,8 @@ class Subprocess:
                         avoid_printing_command,
                         avoid_printing_command_reason,
                         avoid_printing_command_output,
-                        avoid_printing_command_output_reason):
+                        avoid_printing_command_output_reason,
+                        interaction_mode):
 
         post_processed_cmd = ""
         str_cmd = ""
@@ -667,14 +733,16 @@ class Subprocess:
             elif type(cmd) is str:
                 post_processed_cmd = cmd
                 str_cmd = cmd
+            else:
+                raise Exception("The 'cmd' parameter should be of types 'str' ot 'list' when used in a shell mode!")
         else:
             if type(cmd) is list:
                 post_processed_cmd = cmd
                 for argument in cmd:
                     str_cmd += " " + argument
                 str_cmd = str_cmd.strip(" ")
-            elif type(cmd) is str:
-                raise Exception("cmd of type \"str\" is not supported in combination with \"shell = True\"!")
+            else:
+                raise Exception("The 'cmd' parameter should be of type 'list' when used in a non-shell mode!")
 
         logger.info("-------------------------------------")
 
@@ -685,9 +753,18 @@ class Subprocess:
             unescaped_cmd = cmd
 
             if True == substitute_params:
-                unescaped_cmd = re.sub(r'\$\$', '$', cmd)
-                unescaped_cmd = re.sub(r'\{\{', '{', cmd)
-                unescaped_cmd = re.sub(r'\}\}', '}', cmd)
+                if shell == True:
+                    if isinstance(cmd, str):
+                        unescaped_cmd = self.__apply_replacements(cmd)
+                    elif isinstance(cmd, list):
+                        unescaped_cmd = [self.__apply_replacements(s) for s in cmd]
+                    else:
+                        raise Exception("The 'cmd' parameter should be of types 'str' ot 'list' when used in a shell mode!")
+                else:
+                    if isinstance(cmd, list):
+                        unescaped_cmd = [self.__apply_replacements(s) for s in cmd]
+                    else:
+                        raise Exception("The 'cmd' parameter should be of type 'list' when used in a non-shell mode!")
 
             logger.info(f"{unescaped_cmd}")
         else:
@@ -749,7 +826,8 @@ class Subprocess:
 
                 try:
                     result = SubprocessCommandOutput(exec_mode, sub_process, timeout, communication_mode, master_fd,
-                                                     avoid_printing_command_output, avoid_printing_command_output_reason)
+                                                     avoid_printing_command_output, avoid_printing_command_output_reason,
+                                                     interaction_mode)
                 except:
                     sub_process.kill()
                     raise
@@ -757,6 +835,7 @@ class Subprocess:
                 signal.signal(signal.SIGWINCH, old_action)
         elif communication_mode == CommunicationMode.PIPE_OUTPUT:
             try:
+
                 sub_process = subprocess.Popen(result_cmd,
                     shell = shell,
                     stdout = subprocess.PIPE,
@@ -766,7 +845,9 @@ class Subprocess:
                     env = env)
 
                 try:
-                    result = SubprocessCommandOutput(exec_mode, sub_process, timeout, communication_mode, None)
+                    result = SubprocessCommandOutput(exec_mode, sub_process, timeout, communication_mode, None,
+                                                     avoid_printing_command_output, avoid_printing_command_output_reason,
+                                                     interaction_mode)
                 except:
                     sub_process.kill()
                     raise
@@ -868,12 +949,22 @@ class Task:
                                 expected_return_codes = [0],
                                 substitute_params = True,
                                 shell = True,
-                                exec_mode = ExecutionMode.COLLECT_DATA,
-                                communication_mode = CommunicationMode.USE_PTY,
+                                exec_mode = None,
+                                communication_mode = None,
                                 avoid_printing_command = False,
                                 avoid_printing_command_reason = "The command contains a sensitive information",
                                 avoid_printing_command_output = False,
-                                avoid_printing_command_output_reason = "The command output contains a sensitive information"):
+                                avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                                interaction_mode = None):
+        if exec_mode == None:
+            exec_mode = Config.get_default_execution_mode()
+
+        if communication_mode == None:
+            communication_mode = Config.get_default_communication_mode()
+
+        if interaction_mode == None:
+            interaction_mode = Config.get_default_interaction_mode()
+
         process = Subprocess()
         command_output = process.exec_subprocess(cmd,
                                                  timeout,
@@ -887,7 +978,8 @@ class Task:
                                                  avoid_printing_command = avoid_printing_command,
                                                  avoid_printing_command_reason = avoid_printing_command_reason,
                                                  avoid_printing_command_output = avoid_printing_command_output,
-                                                 avoid_printing_command_output_reason = avoid_printing_command_output_reason)
+                                                 avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+                                                 interaction_mode = interaction_mode)
 
         if not command_output.exit_code in expected_return_codes:
             raise Exception(f"Subprocess should succeed! Expected return codes are: '{expected_return_codes}'. "
@@ -903,12 +995,22 @@ class Task:
                         timeout = 0,
                         substitute_params = True,
                         shell = True,
-                        exec_mode = ExecutionMode.COLLECT_DATA,
-                        communication_mode = CommunicationMode.USE_PTY,
+                        exec_mode = None,
+                        communication_mode = None,
                         avoid_printing_command = False,
                         avoid_printing_command_reason = "The command contains a sensitive information",
                         avoid_printing_command_output = False,
-                        avoid_printing_command_output_reason = "The command output contains a sensitive information"):
+                        avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                        interaction_mode = None):
+        if exec_mode == None:
+            exec_mode = Config.get_default_execution_mode()
+
+        if communication_mode == None:
+            communication_mode = Config.get_default_communication_mode()
+
+        if interaction_mode == None:
+            interaction_mode = Config.get_default_interaction_mode()
+
         process = Subprocess()
         command_output = process.exec_subprocess(cmd,
                                                  timeout,
@@ -922,7 +1024,8 @@ class Task:
                                                  avoid_printing_command = avoid_printing_command,
                                                  avoid_printing_command_reason = avoid_printing_command_reason,
                                                  avoid_printing_command_output = avoid_printing_command_output,
-                                                 avoid_printing_command_output_reason = avoid_printing_command_output_reason)
+                                                 avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+                                                 interaction_mode = interaction_mode)
 
         return command_output
 
@@ -936,18 +1039,26 @@ class Task:
                              timeout = 0,
                              expected_return_codes = [0],
                              substitute_params = True,
-                             exec_mode = ExecutionMode.COLLECT_DATA,
+                             exec_mode = None,
                              jumphost = None,
                              passphrase = None,
                              avoid_printing_command = False,
                              avoid_printing_command_reason = "The command contains a sensitive information",
                              avoid_printing_command_output = False,
-                             avoid_printing_command_output_reason = "The command output contains a sensitive information"):
+                             avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                             interaction_mode = None):
+        if exec_mode == None:
+            exec_mode = Config.get_default_execution_mode()
+
+        if interaction_mode == None:
+            interaction_mode = Config.get_default_interaction_mode()
+
         command_output = self.__ssh_connection_cache.exec_command(cmd, host, user, port,
             password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
             exec_mode = exec_mode, params = self.__dict__, jumphost = jumphost, passphrase = passphrase,
             avoid_printing_command = avoid_printing_command, avoid_printing_command_reason = avoid_printing_command_reason,
-            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason)
+            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+            interaction_mode = interaction_mode)
 
         if not command_output.exit_code in expected_return_codes:
             raise Exception(f"SSH command should succeed! Expected return codes are: '{expected_return_codes}'. "
@@ -967,18 +1078,26 @@ class Task:
                      key_filename = [],
                      timeout = 0,
                      substitute_params = True,
-                     exec_mode = ExecutionMode.COLLECT_DATA,
+                     exec_mode = None,
                      jumphost = None,
                      passphrase = None,
                      avoid_printing_command = False,
                      avoid_printing_command_reason = "The command contains a sensitive information",
                      avoid_printing_command_output = False,
-                     avoid_printing_command_output_reason = "The command output contains a sensitive information"):
+                     avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                     interaction_mode = None):
+        if exec_mode == None:
+            exec_mode = Config.get_default_execution_mode()
+
+        if interaction_mode == None:
+            interaction_mode = Config.get_default_interaction_mode()
+
         command_output = self.__ssh_connection_cache.exec_command(cmd, host, user, port,
             password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
             exec_mode = exec_mode, params = self.__dict__, jumphost = jumphost, passphrase = passphrase,
             avoid_printing_command = avoid_printing_command, avoid_printing_command_reason = avoid_printing_command_reason,
-            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason)
+            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+            interaction_mode = interaction_mode)
 
         return command_output
 
