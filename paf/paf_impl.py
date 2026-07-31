@@ -862,6 +862,18 @@ class Subprocess:
         return result
 
 class Environment:
+    __SENSITIVE_NAME_PATTERNS = (
+        "PASSWORD",
+        "PASSWD",
+        "PASSPHRASE",
+        "TOKEN",
+        "SECRET",
+        "PRIVATE_KEY",
+        "API_KEY",
+        "ACCESS_KEY",
+        "CREDENTIAL",
+    )
+
     def __init__(self):
         self.__variables = {}
 
@@ -872,20 +884,31 @@ class Environment:
         self.__variables[key] = value
 
     def getVariableValue(self, key, default_value = None):
-        if default_value:
-            if self.__variables.has(key):
-                return self.__variables.get(key)
-            else:
-                return default_value
-        else:
+        if key in self.__variables:
             return self.__variables.get(key)
+        return default_value
 
     def getVariables(self):
         return self.__variables
 
+    def __is_sensitive_variable(self, key):
+        normalized_key = key.upper()
+        if any(pattern in normalized_key for pattern in self.__SENSITIVE_NAME_PATTERNS):
+            return True
+
+        secret_params = self.__variables.get("PAF_SECRET_PARAMS")
+        if secret_params:
+            for secret_param in re.split("[,; ]+", secret_params):
+                if secret_param and secret_param.upper() == normalized_key:
+                    return True
+
+        return False
+
     def dump(self):
         for key in self.__variables:
             variable_content = self.__variables[key]
+            if self.__is_sensitive_variable(key):
+                variable_content = "<hidden>"
 
             if " " in variable_content:
                 variable_content = '"' + variable_content + '"'
@@ -913,7 +936,7 @@ class Task:
             and self.__environment.getVariableValue(param_name)
 
     def get_environment_param(self, param_name, default_value = None):
-        return self.__environment.getVariableValue(param_name, default_value = None)
+        return self.__environment.getVariableValue(param_name, default_value = default_value)
 
     def set_environment_param(self, param_name, param_value):
         return self.__environment.setVariableValue(param_name, param_value)

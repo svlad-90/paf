@@ -161,6 +161,13 @@ The API of the paf_impl.The Task class, which the developer of the scenarios sho
     - `InteractionMode.PROCESS_INPUT` - the user input will be considered
     - `InteractionMode.IGNORE_INPUT` - the user input will be ignored
 
+  PAF also masks common sensitive environment parameter names while printing a
+  task environment. Names containing `PASSWORD`, `PASSWD`, `PASSPHRASE`,
+  `TOKEN`, `SECRET`, `PRIVATE_KEY`, `API_KEY`, `ACCESS_KEY`, or `CREDENTIAL`
+  are printed as `<hidden>`. Use `PAF_SECRET_PARAMS` with a space-, comma-, or
+  semicolon-separated list of exact parameter names to hide scenario-specific
+  fields.
+
   **Return value:**
   The string with the output of the `cmd` command's execution.
 
