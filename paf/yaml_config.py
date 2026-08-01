@@ -14,6 +14,38 @@ from jsonschema.exceptions import best_match
 from paf.paf_impl import logger
 
 
+DOMAIN_DESCRIPTOR_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "minLength": 1,
+        },
+        "schema": {
+            "type": "string",
+            "minLength": 1,
+        },
+        "handler": {
+            "type": "string",
+            "minLength": 1,
+        },
+        "projection": {
+            "type": "object",
+            "properties": {
+                "prefix": {
+                    "type": "string",
+                    "pattern": "^[A-Z_][A-Z0-9_]*$",
+                },
+            },
+            "additionalProperties": False,
+        },
+    },
+    "additionalProperties": False,
+}
+
+
 def load_yaml_file(path):
     with open(path, "r", encoding="utf-8") as stream:
         loaded = yaml.safe_load(stream)
@@ -123,6 +155,26 @@ def load_case_config(config_paths, yaml_parameters):
     return merged
 
 
+def _validate_with_schema(data, schema, description):
+    validator = Draft202012Validator(schema)
+    error = best_match(validator.iter_errors(data))
+    if not error:
+        return
+
+    path = ".".join(str(element) for element in error.absolute_path)
+    if path:
+        raise Exception(f"{description} validation failed at '{path}': {error.message}")
+    raise Exception(f"{description} validation failed: {error.message}")
+
+
+def validate_domain_descriptor(descriptor, domain_path):
+    _validate_with_schema(
+        descriptor,
+        DOMAIN_DESCRIPTOR_SCHEMA,
+        f"Domain descriptor '{domain_path}'",
+    )
+
+
 def discover_domains(module_dirs):
     domains = {}
     for module_dir in module_dirs or []:
@@ -132,9 +184,8 @@ def discover_domains(module_dirs):
 
             domain_path = os.path.join(root, "domain.yaml")
             descriptor = load_yaml_file(domain_path)
+            validate_domain_descriptor(descriptor, domain_path)
             domain_name = descriptor.get("name")
-            if not domain_name:
-                raise Exception(f"Domain descriptor '{domain_path}' does not define 'name'")
 
             descriptor["_path"] = domain_path
             descriptor["_root"] = root
@@ -189,13 +240,7 @@ def validate_case_config(config, schema_paths):
     for schema_path in schema_paths:
         logger.info(f"Validate YAML config with schema '{schema_path}'")
         schema = load_yaml_file(schema_path)
-        validator = Draft202012Validator(schema)
-        error = best_match(validator.iter_errors(config))
-        if error:
-            path = ".".join(str(element) for element in error.absolute_path)
-            if path:
-                raise Exception(f"YAML schema validation failed at '{path}': {error.message}")
-            raise Exception(f"YAML schema validation failed: {error.message}")
+        _validate_with_schema(config, schema, "YAML schema")
 
 
 def _safe_env_name(path_elements):

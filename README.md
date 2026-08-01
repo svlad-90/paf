@@ -504,6 +504,22 @@ schema, PAF validates the case with that schema. PAF schemas are JSON Schema
 documents. They may be stored as `.json`, `.yaml`, or `.yml`; YAML is
 recommended for readability.
 
+`domain.yaml` is validated by PAF before registration. The descriptor supports
+the following fields:
+
+```yaml
+name: xen-zephyr
+schema: schema.yaml
+handler: tasks:XenZephyrDomain
+projection:
+  prefix: YAML_CONF_
+```
+
+Only `name` is required. `schema` points to the domain's case schema relative
+to the descriptor directory. `handler` is reserved for domain expanders.
+`projection.prefix` controls the environment variable prefix used for YAML
+projection and must be an uppercase shell-style name.
+
 Python modules loaded from `--import-module-dir` are addressable both by the
 legacy basename alias and by dotted aliases derived from their import root. For
 example, `--import-module-dir ./paf_workspace` makes `tasks.py` addressable as
