@@ -469,6 +469,7 @@ Currently, the tool supports the following set of command line options:
 |-yc, --yaml-config|Apply this YAML case configuration file|Multiple|
 |-ys, --yaml-schema|Validate the merged YAML case with this schema|Multiple|
 |-yp, --yaml-parameter|Override a YAML case value using path=value syntax|Multiple|
+|-dyp, --domain-yaml-parameter|Override a domain descriptor value using domain.path=value syntax|Multiple|
 |-p, --parameter|Add parameter to the execution context|Multiple|
 |-imd, --import_module_dir|Load all Python modules from the specified directory recursively. It also adds specified directories to the sys.path|Multiple|
 |-ld, --log-dir|Store the output to the specified directory|Last win|
@@ -488,14 +489,18 @@ python ./paf/paf_main.py \
   -yc ./cases/base.yaml \
   -yc ./cases/pr103.yaml \
   -yp validation.timeout_sec=120 \
+  -dyp xen-zephyr.requires.images.zephyr-xen.image=my/zephyr-xen:debug \
   -s default \
   -ld ./logs
 ```
 
 Multiple YAML files are deep-merged in command-line order. Later files replace
 earlier scalar and list values, while object values are merged recursively.
-`--yaml-parameter` overrides are applied after the files are merged and before
-schema validation.
+Domain descriptors are loaded first, then `--domain-yaml-parameter` overrides
+are applied and descriptors are validated. YAML case files are loaded next.
+Domain image requirements are merged into the case as default `docker.images`
+entries, then `--yaml-parameter` overrides are applied, and the final case is
+validated.
 
 PAF discovers optional automation domain descriptors named `domain.yaml` under
 the imported module directories. If the merged YAML case declares
@@ -513,12 +518,53 @@ schema: schema.yaml
 handler: tasks:XenZephyrDomain
 projection:
   prefix: YAML_CONF_
+requires:
+  images:
+    zephyr-xen:
+      image: codex/zephyr-xen:latest
+      dockerfile: codex_tools/environments/zephyr-xen/Dockerfile
+      context: codex_tools/environments/zephyr-xen
 ```
 
 Only `name` is required. `schema` points to the domain's case schema relative
 to the descriptor directory. `handler` is reserved for domain expanders.
 `projection.prefix` controls the environment variable prefix used for YAML
-projection and must be an uppercase shell-style name.
+projection and must be an uppercase shell-style name. `requires.images`
+declares image aliases needed by the domain and can bind those aliases to
+default Docker image build descriptions.
+
+Case YAML can define or override Docker images and container run profiles:
+
+```yaml
+docker:
+  images:
+    zephyr-xen:
+      image: codex/zephyr-xen:latest
+      dockerfile: codex_tools/environments/zephyr-xen/Dockerfile
+      context: codex_tools/environments/zephyr-xen
+      network: host
+  containers:
+    zephyr-build:
+      image: zephyr-xen
+      workdir: /workspace
+      mounts:
+        - source: ${WORKSPACE_ROOT}
+          target: /workspace
+          mode: rw
+      env:
+        ZEPHYR_BASE: /workspace/zephyr
+```
+
+Tasks select a container alias, not a Dockerfile:
+
+```python
+self.ensure_docker_image("zephyr-xen")
+self.docker_subprocess_must_succeed("zephyr-build", "west build ...")
+```
+
+If the selected image is missing, PAF builds it from the configured
+`dockerfile` and `context`. Docker commands are still logged before and after
+PAF parameter substitution.
 
 Python modules loaded from `--import-module-dir` are addressable both by the
 legacy basename alias and by dotted aliases derived from their import root. For

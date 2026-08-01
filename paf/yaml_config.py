@@ -41,6 +41,33 @@ DOMAIN_DESCRIPTOR_SCHEMA = {
             },
             "additionalProperties": False,
         },
+        "requires": {
+            "type": "object",
+            "properties": {
+                "images": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "required": ["image"],
+                        "properties": {
+                            "image": {"type": "string", "minLength": 1},
+                            "dockerfile": {"type": "string", "minLength": 1},
+                            "context": {"type": "string", "minLength": 1},
+                            "target": {"type": "string", "minLength": 1},
+                            "network": {"type": "string", "minLength": 1},
+                            "build_args": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": ["string", "number", "boolean"],
+                                },
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "additionalProperties": False,
+        },
     },
     "additionalProperties": False,
 }
@@ -155,6 +182,13 @@ def load_case_config(config_paths, yaml_parameters):
     return merged
 
 
+def apply_yaml_parameters(config, yaml_parameters):
+    for yaml_parameter in yaml_parameters or []:
+        path, value = parse_yaml_parameter(yaml_parameter)
+        logger.info(f"Apply YAML parameter override: {path}={value}")
+        apply_yaml_parameter(config, path, value)
+
+
 def _validate_with_schema(data, schema, description):
     validator = Draft202012Validator(schema)
     error = best_match(validator.iter_errors(data))
@@ -175,7 +209,26 @@ def validate_domain_descriptor(descriptor, domain_path):
     )
 
 
+def apply_domain_yaml_parameters(descriptor, domain_name, domain_yaml_parameters):
+    prefix = f"{domain_name}."
+    for domain_yaml_parameter in domain_yaml_parameters or []:
+        path, value = parse_yaml_parameter(domain_yaml_parameter)
+        if not path.startswith(prefix):
+            continue
+
+        domain_path = path[len(prefix):]
+        if not domain_path:
+            raise Exception(f"Wrong domain YAML parameter path: '{path}'")
+
+        logger.info(f"Apply domain YAML parameter override: {path}={value}")
+        apply_yaml_parameter(descriptor, domain_path, value)
+
+
 def discover_domains(module_dirs):
+    return discover_domains_with_overrides(module_dirs, None)
+
+
+def discover_domains_with_overrides(module_dirs, domain_yaml_parameters):
     domains = {}
     for module_dir in module_dirs or []:
         for root, _, files in os.walk(module_dir):
@@ -184,8 +237,12 @@ def discover_domains(module_dirs):
 
             domain_path = os.path.join(root, "domain.yaml")
             descriptor = load_yaml_file(domain_path)
-            validate_domain_descriptor(descriptor, domain_path)
             domain_name = descriptor.get("name")
+            if not domain_name:
+                raise Exception(f"Domain descriptor '{domain_path}' does not define 'name'")
+
+            apply_domain_yaml_parameters(descriptor, domain_name, domain_yaml_parameters)
+            validate_domain_descriptor(descriptor, domain_path)
 
             descriptor["_path"] = domain_path
             descriptor["_root"] = root
@@ -208,6 +265,21 @@ def _case_domain_names(config):
                 result.append(entry.get("domain"))
 
     return list(dict.fromkeys(result))
+
+
+def apply_domain_defaults(config, domains):
+    default_config = {"docker": {"images": {}}}
+
+    for domain_name in _case_domain_names(config):
+        domain_descriptor = domains.get(domain_name)
+        if not domain_descriptor:
+            raise Exception(f"YAML domain '{domain_name}' was not found in imported module dirs")
+
+        required_images = domain_descriptor.get("requires", {}).get("images", {})
+        for image_alias, image_config in required_images.items():
+            default_config["docker"]["images"][image_alias] = image_config
+
+    return deep_merge(default_config, config)
 
 
 def _resolve_schema_path(schema_path, domain_descriptor):

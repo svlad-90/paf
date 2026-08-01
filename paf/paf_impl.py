@@ -17,6 +17,7 @@ import tty
 import sys
 import subprocess
 import select
+import shlex
 import signal
 import errno
 import os
@@ -740,9 +741,7 @@ class Subprocess:
         else:
             if type(cmd) is list:
                 post_processed_cmd = cmd
-                for argument in cmd:
-                    str_cmd += " " + argument
-                str_cmd = str_cmd.strip(" ")
+                str_cmd = shlex.join(cmd)
             else:
                 raise Exception("The 'cmd' parameter should be of type 'list' when used in a non-shell mode!")
 
@@ -782,8 +781,7 @@ class Subprocess:
                     template = Template(argument)
                     result_argument = template.substitute(params)
                     result_cmd.append(result_argument)
-                    result_cmd_str += " " + result_argument
-                result_cmd_str = result_cmd_str.strip(" ")
+                result_cmd_str = shlex.join(result_cmd)
             elif type(post_processed_cmd) is str:
                 template = Template(cmd)
                 result_cmd = template.substitute(params)
@@ -1072,6 +1070,71 @@ class Task:
                                                  interaction_mode = interaction_mode)
 
         return command_output
+
+    def ensure_docker_image(self, image_alias):
+        from paf import docker_runtime
+        return docker_runtime.ensure_image(self, image_alias)
+
+    def docker_exec_subprocess(self,
+                               container_alias,
+                               cmd,
+                               timeout = 0,
+                               substitute_params = True,
+                               exec_mode = None,
+                               communication_mode = None,
+                               avoid_printing_command = False,
+                               avoid_printing_command_reason = "The command contains a sensitive information",
+                               avoid_printing_command_output = False,
+                               avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                               interaction_mode = None):
+        from paf import docker_runtime
+        docker_cmd = docker_runtime.docker_run_command(self, container_alias, cmd)
+        return self.exec_subprocess(docker_cmd,
+                                    timeout = timeout,
+                                    substitute_params = substitute_params,
+                                    shell = False,
+                                    exec_mode = exec_mode,
+                                    communication_mode = communication_mode,
+                                    avoid_printing_command = avoid_printing_command,
+                                    avoid_printing_command_reason = avoid_printing_command_reason,
+                                    avoid_printing_command_output = avoid_printing_command_output,
+                                    avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+                                    interaction_mode = interaction_mode)
+
+    def docker_subprocess_must_succeed(self,
+                                       container_alias,
+                                       cmd,
+                                       timeout = 0,
+                                       expected_return_codes = [0],
+                                       substitute_params = True,
+                                       exec_mode = None,
+                                       communication_mode = None,
+                                       avoid_printing_command = False,
+                                       avoid_printing_command_reason = "The command contains a sensitive information",
+                                       avoid_printing_command_output = False,
+                                       avoid_printing_command_output_reason = "The command output contains a sensitive information",
+                                       interaction_mode = None):
+        command_output = self.docker_exec_subprocess(
+            container_alias,
+            cmd,
+            timeout = timeout,
+            substitute_params = substitute_params,
+            exec_mode = exec_mode,
+            communication_mode = communication_mode,
+            avoid_printing_command = avoid_printing_command,
+            avoid_printing_command_reason = avoid_printing_command_reason,
+            avoid_printing_command_output = avoid_printing_command_output,
+            avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+            interaction_mode = interaction_mode)
+
+        if not command_output.exit_code in expected_return_codes:
+            raise Exception(f"Docker subprocess should succeed! Expected return codes are: '{expected_return_codes}'. "
+                            f"Actual return code: '{command_output.exit_code}'")
+        else:
+            if command_output.exit_code != 0:
+                logger.info(f"Return code '{command_output.exit_code}' fits to the expected return code.")
+
+            return command_output.stdout
 
     def ssh_command_must_succeed(self,
                              cmd,

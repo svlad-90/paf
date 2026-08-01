@@ -27,6 +27,8 @@ def main():
                         help="YAML case schema files", metavar="YAML_SCHEMA", action="append")
     parser.add_argument("-yp", "--yaml-parameter", dest="yaml_parameters",
                         help="YAML case override in path=value form", metavar="YAML_PARAM", action="append")
+    parser.add_argument("-dyp", "--domain-yaml-parameter", dest="domain_yaml_parameters",
+                        help="Domain descriptor override in domain.path=value form", metavar="DOMAIN_YAML_PARAM", action="append")
     parser.add_argument("-p", "--parameter", dest="parameters",
                         help="environment variable", metavar="ENV_VAR", action="append")
     parser.add_argument("-imd", "--import-module-dir", dest="import_module_dirs",
@@ -45,7 +47,7 @@ def main():
     if import_module_dirs:
         execution_context.import_modules(import_module_dirs)
 
-    yaml_domains = yaml_config.discover_domains(import_module_dirs)
+    yaml_domains = yaml_config.discover_domains_with_overrides(import_module_dirs, args.domain_yaml_parameters)
 
     # From the command line parse the elements, which we need to execute
     tasks = args.tasks
@@ -70,7 +72,9 @@ def main():
             execution_context.parse_config(config_path, execution_context, environment)
 
     if args.yaml_configs:
-        case_config = yaml_config.load_case_config(args.yaml_configs, args.yaml_parameters)
+        case_config = yaml_config.load_case_config(args.yaml_configs, None)
+        case_config = yaml_config.apply_domain_defaults(case_config, yaml_domains)
+        yaml_config.apply_yaml_parameters(case_config, args.yaml_parameters)
         schema_paths = yaml_config.resolve_schema_paths(case_config, yaml_domains, args.yaml_schemas)
         yaml_config.validate_case_config(case_config, schema_paths)
         generated_root = args.log_dir or ".paf"
