@@ -24,25 +24,34 @@ import os
 import enum
 from datetime import datetime
 import re
+from typing import Dict, List, Optional, Union, cast
 
 from paf import common
 from pickle import NONE
 import pty
 
 class logger:
-    __log_dir = None
-    log_filepath = None
+    __log_dir: Optional[str] = None
+    log_filepath: Optional[str] = None
     __logging = logging.getLogger(__name__)
-    __logging_to_file = None
+    __logging_to_file: Optional[logging.Logger] = None
     __print_to_file = False
     __messageFormat = "%(asctime)s,%(msecs)03d %(levelname)s %(message)s"
     __simpleFormat = '%(message)s'
 
     @staticmethod
     def __generate_log_filepath():
+        if logger.__log_dir is None:
+            raise RuntimeError("PAF log directory is not configured")
         now = datetime.now()
         date_time = now.strftime("%m_%d_%Y_%H_%M_%S")
         return os.path.join(logger.__log_dir, f"paf_{date_time}.log")
+
+    @staticmethod
+    def __file_logger():
+        if logger.__logging_to_file is None:
+            raise RuntimeError("PAF file logger is not initialized")
+        return logger.__logging_to_file
 
     @staticmethod
     def init():
@@ -69,29 +78,29 @@ class logger:
     @staticmethod
     def __change_to_simple_formatting():
         for handler in logger.__logging.handlers:
-            handler.setFormatter(logger.__simpleFormat)
+            handler.setFormatter(logging.Formatter(logger.__simpleFormat))
 
     @staticmethod
     def __change_to_message_formatting():
         for handler in logger.__logging.handlers:
-            handler.setFormatter(logger.__messageFormat)
+            handler.setFormatter(logging.Formatter(logger.__messageFormat))
 
     @staticmethod
     def non_formatted_info_to_file( msg, *args, **kwargs ):
         logger.__change_to_simple_formatting()
-        logger.__logging_to_file.info( msg, *args, **kwargs )
+        logger.__file_logger().info( msg, *args, **kwargs )
         logger.__change_to_message_formatting()
 
     @staticmethod
     def non_formatted_warning_to_file( msg, *args, **kwargs ):
         logger.__change_to_simple_formatting()
-        logger.__logging_to_file.warning( msg, *args, **kwargs )
+        logger.__file_logger().warning( msg, *args, **kwargs )
         logger.__change_to_message_formatting()
 
     @staticmethod
     def non_formatted_error_to_file( msg, *args, **kwargs ):
         logger.__change_to_simple_formatting()
-        logger.__logging_to_file.error( msg, *args, **kwargs )
+        logger.__file_logger().error( msg, *args, **kwargs )
         logger.__change_to_message_formatting()
 
     @staticmethod
@@ -109,21 +118,21 @@ class logger:
         logger.__logging.info(msg, *args, **kwargs)
 
         if logger.log_to_file():
-            logger.__logging_to_file.info(msg, *args, **kwargs)
+            logger.__file_logger().info(msg, *args, **kwargs)
 
     @staticmethod
     def warning(msg, *args, **kwargs):
         logger.__logging.warning(msg, *args, **kwargs)
 
         if logger.log_to_file():
-            logger.__logging_to_file.warning(msg, *args, **kwargs)
+            logger.__file_logger().warning(msg, *args, **kwargs)
 
     @staticmethod
     def error(msg, *args, **kwargs):
         logger.__logging.error(msg, *args, **kwargs)
 
         if logger.log_to_file():
-            logger.__logging_to_file.error(msg, *args, **kwargs)
+            logger.__file_logger().error(msg, *args, **kwargs)
 
 class ExecutionMode(enum.Enum):
     PRINT        = 0 # print but do not collect stdout and stderr
@@ -224,7 +233,8 @@ class SSHCommandOutput:
                 try:
                     r, w, e = select.select([chan, sys.stdin], [], [])
                 except select.error as e:
-                    if e[0] != errno.EINTR: raise
+                    if e.errno != errno.EINTR:
+                        raise
 
                 if chan in r:
                     if chan.recv_ready():
@@ -517,15 +527,15 @@ class SSHConnectionCache():
 
 def set_tty_mode(fd, when=termios.TCSAFLUSH):
     """Put terminal into a raw mode."""
-    mode = tty.tcgetattr(fd)
-    mode[tty.IFLAG] = mode[tty.IFLAG] & ~(tty.BRKINT | tty.ICRNL | tty.INPCK | tty.ISTRIP | tty.IXON)
-    mode[tty.OFLAG] = mode[tty.OFLAG] & ~(tty.OPOST)
-    mode[tty.CFLAG] = mode[tty.CFLAG] & ~(tty.CSIZE | tty.PARENB)
-    mode[tty.CFLAG] = mode[tty.CFLAG] | tty.CS8
-    mode[tty.LFLAG] = mode[tty.LFLAG] & ~(tty.ECHO | tty.ICANON | tty.IEXTEN | tty.ISIG)
-    mode[tty.CC][tty.VMIN] = 1
-    mode[tty.CC][tty.VTIME] = 0
-    tty.tcsetattr(fd, when, mode)
+    mode = termios.tcgetattr(fd)
+    mode[tty.IFLAG] = mode[tty.IFLAG] & ~(termios.BRKINT | termios.ICRNL | termios.INPCK | termios.ISTRIP | termios.IXON)
+    mode[tty.OFLAG] = mode[tty.OFLAG] & ~(termios.OPOST)
+    mode[tty.CFLAG] = mode[tty.CFLAG] & ~(termios.CSIZE | termios.PARENB)
+    mode[tty.CFLAG] = mode[tty.CFLAG] | termios.CS8
+    mode[tty.LFLAG] = mode[tty.LFLAG] & ~(termios.ECHO | termios.ICANON | termios.IEXTEN | termios.ISIG)
+    mode[tty.CC][termios.VMIN] = 1
+    mode[tty.CC][termios.VTIME] = 0
+    termios.tcsetattr(fd, when, mode)
 
 class SubprocessCommandOutput:
     def __init__(self, exec_mode, sub_process, timeout, communication_mode, master_fd,
@@ -563,7 +573,8 @@ class SubprocessCommandOutput:
                         r, _, e = select.select(select_fds, [], [], 0.05)
                     except select.error as e:
 
-                        if e[0] != errno.EINTR: raise
+                        if e.errno != errno.EINTR:
+                            raise
 
                     if master_fd in r:
 
@@ -635,9 +646,10 @@ class SubprocessCommandOutput:
                         select_fds.append(stdin_fd)
 
                     try:
-                        r, _, e = select.select(select_fds, [], [])
+                        r, _, _ = select.select(select_fds, [], [])
                     except select.error as e:
-                        if e[0] != errno.EINTR: raise
+                        if e.errno != errno.EINTR:
+                            raise
 
                     if stdout_fd in r:
 
@@ -736,7 +748,7 @@ class SubprocessCommandOutput:
             if common.isatty(sys.stdin):
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
 
-        self.exit_code = exit_code
+        self.exit_code = exit_code if exit_code is not None else -1
 
 class Subprocess:
 
@@ -766,14 +778,12 @@ class Subprocess:
                         avoid_printing_command_output_reason,
                         interaction_mode):
 
-        post_processed_cmd = ""
+        post_processed_cmd: Union[str, List[str]] = ""
         str_cmd = ""
 
         if shell == True:
             if type(cmd) is list:
-                for argument in cmd:
-                    post_processed_cmd += " " + argument
-                post_processed_cmd = post_processed_cmd.strip(" ")
+                post_processed_cmd = " ".join(cmd)
                 str_cmd = post_processed_cmd
             elif type(cmd) is str:
                 post_processed_cmd = cmd
@@ -782,7 +792,7 @@ class Subprocess:
                 raise Exception("The 'cmd' parameter should be of types 'str' ot 'list' when used in a shell mode!")
         else:
             if type(cmd) is list:
-                post_processed_cmd = cmd
+                post_processed_cmd = cast(List[str], cmd)
                 str_cmd = shlex.join(cmd)
             else:
                 raise Exception("The 'cmd' parameter should be of type 'list' when used in a non-shell mode!")
@@ -813,7 +823,7 @@ class Subprocess:
         else:
             logger.info(f"{avoid_printing_command_reason}")
 
-        result_cmd = ""
+        result_cmd: Union[str, List[str]] = ""
         result_cmd_str = ""
 
         if True == substitute_params:
@@ -843,7 +853,7 @@ class Subprocess:
             executable = "/bin/bash"
 
         terminal_width, terminal_height = common.get_terminal_dimensions()
-        env = os.environ.copy()
+        env: Dict[str, str] = os.environ.copy()
 
         if shell == True:
             env["COLUMNS"] = str(terminal_width)

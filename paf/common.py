@@ -11,6 +11,7 @@ import fcntl
 import struct
 import termios
 import glob
+import importlib.util
 
 def has_fileno(stream):
     """
@@ -73,7 +74,7 @@ def bytes_to_read(input_):
     # it's not a tty but has a fileno, or vice versa; neither is typically
     # going to work re: ioctl().
     if not os.name == 'nt' and isatty(input_) and has_fileno(input_):
-        fionread = fcntl.ioctl(input_, termios.FIONREAD, "  ")
+        fionread = fcntl.ioctl(input_, termios.FIONREAD, b"  ")
         return struct.unpack("h", fionread)[0]
     return 1
 
@@ -81,11 +82,12 @@ def load_module(absolute_path, module_name = None):
 
     print(f"Attempt to load module - {absolute_path}")
 
-    import importlib.util
     if module_name == None:
         module_name, _ = os.path.splitext(os.path.split(absolute_path)[-1])
     try:
         spec = importlib.util.spec_from_file_location(module_name, absolute_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not load module spec for '{absolute_path}'")
         py_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(py_mod)
     except ImportError as e:
@@ -95,7 +97,7 @@ def load_module(absolute_path, module_name = None):
         missing_module = e.name
         module_root = os.path.dirname(absolute_path)
 
-        if missing_module + ".py" not in os.listdir(module_root):
+        if missing_module is None or missing_module + ".py" not in os.listdir(module_root):
             msg = "Could not find '{}' in '{}'"
             raise ImportError(msg.format(missing_module, module_root))
 

@@ -36,8 +36,9 @@ jobs:
       - name: Run mypy
         run: >
           pipenv run python -m mypy
-          paf/docker_runtime.py
-          paf/yaml_config.py
+          paf
+          paf_main.py
+          tests
 
       - name: Run unit tests
         run: pipenv run python -m pytest -q

@@ -1,3 +1,5 @@
+from typing import Any
+
 from paf import docker_runtime
 import pytest
 
@@ -11,10 +13,10 @@ class FakeTask:
     WORKSPACE_ROOT = "/host/workspace"
 
     def __init__(self, inspect_exit_code=0):
-        self.commands = []
-        self.must_succeed_commands = []
+        self.commands: list[list[str]] = []
+        self.must_succeed_commands: list[list[str]] = []
         self.inspect_exit_code = inspect_exit_code
-        self.config = {
+        self.config: dict[str, Any] = {
             "docker": {
                 "images": {
                     "builder-img": {

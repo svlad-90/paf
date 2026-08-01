@@ -1,4 +1,5 @@
 import pytest
+from typing import Any
 
 from paf import yaml_config
 
@@ -36,7 +37,7 @@ def test_apply_domain_defaults_then_case_overrides():
 
 
 def test_domain_yaml_parameter_updates_descriptor_before_validation():
-    descriptor = {
+    descriptor: dict[str, Any] = {
         "name": "sample",
         "requires": {
             "images": {
@@ -122,7 +123,7 @@ def test_yaml_file_loading_and_deep_merge(tmp_path):
 
 
 def test_yaml_parameters_create_nested_objects_and_lists():
-    config = {}
+    config: dict[str, Any] = {}
 
     yaml_config.apply_yaml_parameters(
         config,
@@ -162,7 +163,7 @@ def test_yaml_parameter_rejects_wrong_assignment(parameter):
     ],
 )
 def test_yaml_parameter_rejects_wrong_path(path):
-    config = {}
+    config: dict[str, Any] = {}
     with pytest.raises(Exception, match="Wrong YAML parameter path"):
         yaml_config.apply_yaml_parameters(config, [path])
 

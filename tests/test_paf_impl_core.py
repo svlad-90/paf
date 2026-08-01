@@ -1,4 +1,5 @@
 import types
+from typing import Any
 
 import pytest
 
@@ -147,13 +148,13 @@ def test_task_ssh_wrappers_use_connection_cache():
 
     task = Task()
     cache = FakeCache(0)
-    task._Task__ssh_connection_cache = cache
+    task._Task__ssh_connection_cache = cache  # type: ignore[attr-defined]
 
     assert task.ssh_command_must_succeed("echo ${X}", "host", "user") == "ssh-out"
     assert cache.calls[0][0][:4] == ("echo ${X}", "host", "user", 22)
 
     cache = FakeCache(3)
-    task._Task__ssh_connection_cache = cache
+    task._Task__ssh_connection_cache = cache  # type: ignore[attr-defined]
     with pytest.raises(Exception, match="SSH command should succeed"):
         task.ssh_command_must_succeed("false", "host", "user")
     assert task.exec_ssh_command("false", "host", "user").exit_code == 3
@@ -165,10 +166,15 @@ def test_task_docker_wrappers_use_docker_runtime(monkeypatch):
         stdout = "docker-out"
 
     task = Task()
-    calls = []
+    calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def record_exec_subprocess(*args, **kwargs):
+        calls.append((args, kwargs))
+        return Output()
+
     monkeypatch.setattr("paf.docker_runtime.ensure_image", lambda task_arg, alias: f"image:{alias}")
     monkeypatch.setattr("paf.docker_runtime.docker_run_command", lambda task_arg, alias, cmd: ["docker", alias, cmd])
-    monkeypatch.setattr(task, "exec_subprocess", lambda *args, **kwargs: calls.append((args, kwargs)) or Output())
+    monkeypatch.setattr(task, "exec_subprocess", record_exec_subprocess)
 
     assert task.ensure_docker_image("builder") == "image:builder"
     assert task.docker_exec_subprocess("container", "echo ok").stdout == "docker-out"
@@ -195,13 +201,13 @@ def test_task_start_invokes_init_execute_and_exports_environment():
     class RecordingTask(Task):
         def __init__(self):
             super().__init__()
-            self.calls = []
+            self.calls: list[tuple[str, Any]] = []
 
         def init(self):
-            self.calls.append(("init", self.VALUE))
+            self.calls.append(("init", self.VALUE))  # type: ignore[attr-defined]
 
         def execute(self):
-            self.calls.append(("execute", self.VALUE))
+            self.calls.append(("execute", self.VALUE))  # type: ignore[attr-defined]
 
     env = Environment()
     env.setVariableValue("VALUE", "from-env")
@@ -209,7 +215,7 @@ def test_task_start_invokes_init_execute_and_exports_environment():
     task.set_environment(env)
     task.start()
 
-    assert task.VALUE == "from-env"
+    assert task.VALUE == "from-env"  # type: ignore[attr-defined]
     assert task.get_environment() is env
     assert task.calls == [("init", "from-env"), ("execute", "from-env")]
 
@@ -232,7 +238,7 @@ def test_task_boolean_and_environment_helpers():
 
 def test_ssh_connection_cache_reuses_connections(monkeypatch):
     class FakeConnection:
-        instances = []
+        instances: list["FakeConnection"] = []
 
         @staticmethod
         def create_connection_key(host, user, port):
@@ -267,7 +273,7 @@ def test_ssh_connection_cache_reuses_connections(monkeypatch):
 
 def test_ssh_connection_executes_with_paramiko_facade(monkeypatch):
     class FakeClient:
-        instances = []
+        instances: list["FakeClient"] = []
 
         def __init__(self):
             self.connect_kwargs = None
@@ -291,16 +297,16 @@ def test_ssh_connection_executes_with_paramiko_facade(monkeypatch):
             self.stderr = ""
             self.exit_code = 0
 
-    exec_calls = []
+    exec_calls: list[tuple[Any, str, int, dict[str, Any]]] = []
+
+    def fake_exec_command(client, cmd, timeout, **kwargs):
+        exec_calls.append((client, cmd, timeout, kwargs))
+        return "stdin", "stdout", "stderr"
+
     monkeypatch.setattr(paf_impl.paramiko, "SSHClient", FakeClient)
     monkeypatch.setattr(paf_impl.paramiko, "AutoAddPolicy", lambda: "policy")
     monkeypatch.setattr(paf_impl.common, "get_terminal_dimensions", lambda: (120, 40))
-    monkeypatch.setattr(
-        paf_impl.common,
-        "exec_command",
-        lambda client, cmd, timeout, **kwargs: exec_calls.append((client, cmd, timeout, kwargs))
-        or ("stdin", "stdout", "stderr"),
-    )
+    monkeypatch.setattr(paf_impl.common, "exec_command", fake_exec_command)
     monkeypatch.setattr(paf_impl, "SSHCommandOutput", FakeOutput)
 
     connection = SSHConnection("host", "user", 2222, password="pass", key_filename=["id"], passphrase="phrase")
@@ -314,13 +320,14 @@ def test_ssh_connection_executes_with_paramiko_facade(monkeypatch):
 
     assert SSHConnection.create_connection_key("host", "user", 2222) == "user@host:2222"
     assert connection.get_connection_key() == "user@host:2222"
+    assert FakeClient.instances[0].connect_kwargs is not None
     assert FakeClient.instances[0].connect_kwargs["hostname"] == "host"
     assert exec_calls[0][1] == "echo ok"
     assert exec_calls[0][2] == 3
     assert output.stdout == "ssh-output"
     assert FakeClient.instances[0].closed
 
-    connection._SSHConnection__connected = False
+    connection._SSHConnection__connected = False  # type: ignore[attr-defined]
     with pytest.raises(Exception, match="absence of connection"):
         connection.exec_command("true")
 
@@ -332,10 +339,12 @@ def test_ssh_connection_uses_jumphost_channel(monkeypatch):
             return "jump-channel"
 
     class FakeJumpHost:
-        pass
+        _SSHConnection__client: Any
+        _SSHConnection__host: str
+        _SSHConnection__port: int
 
     class FakeClient:
-        instances = []
+        instances: list["FakeClient"] = []
 
         def __init__(self):
             self.transport = FakeTransport()
@@ -361,6 +370,7 @@ def test_ssh_connection_uses_jumphost_channel(monkeypatch):
     connection = SSHConnection("host", "user", 2222, jumphost=jumphost)
 
     assert connection.get_connection_key() == "user@host:2222"
+    assert FakeClient.instances[-1].connect_kwargs is not None
     assert FakeClient.instances[-1].connect_kwargs["sock"] == "jump-channel"
     assert jumphost._SSHConnection__client.transport.channel == (
         "direct-tcpip",
@@ -380,7 +390,7 @@ def test_ssh_local_client_delegates_to_localhost():
 
     client = SSHLocalClient()
     cache = FakeCache()
-    client._Task__ssh_connection_cache = cache
+    client._Task__ssh_connection_cache = cache  # type: ignore[attr-defined]
     client.set_environment_param("LOCAL_HOST_IP_ADDRESS", "127.0.0.1")
     client.set_environment_param("LOCAL_HOST_USER_NAME", "root")
     client.set_environment_param("LOCAL_HOST_SYSTEM_SSH_KEY", "key")
