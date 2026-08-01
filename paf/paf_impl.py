@@ -85,7 +85,7 @@ class logger:
     @staticmethod
     def non_formatted_warning_to_file( msg, *args, **kwargs ):
         logger.__change_to_simple_formatting()
-        logger.__logging_to_file.warn( msg, *args, **kwargs )
+        logger.__logging_to_file.warning( msg, *args, **kwargs )
         logger.__change_to_message_formatting()
 
     @staticmethod
@@ -116,7 +116,7 @@ class logger:
         logger.__logging.warning(msg, *args, **kwargs)
 
         if logger.log_to_file():
-            logger.__logging_to_file.warn(msg, *args, **kwargs)
+            logger.__logging_to_file.warning(msg, *args, **kwargs)
 
     @staticmethod
     def error(msg, *args, **kwargs):
@@ -167,6 +167,36 @@ class Config:
     @staticmethod
     def get_default_communication_mode():
         return Config.__DEFAULT_COMMUNICATION_MODE
+
+
+def _resolve_execution_mode(exec_mode):
+    if exec_mode == None:
+        return Config.get_default_execution_mode()
+    return exec_mode
+
+
+def _resolve_interaction_mode(interaction_mode):
+    if interaction_mode == None:
+        return Config.get_default_interaction_mode()
+    return interaction_mode
+
+
+def _resolve_communication_mode(communication_mode):
+    if communication_mode == None:
+        return Config.get_default_communication_mode()
+    return communication_mode
+
+
+def _check_expected_return_code(command_output, expected_return_codes, failure_prefix):
+    if not command_output.exit_code in expected_return_codes:
+        raise Exception(f"{failure_prefix} Expected return codes are: '{expected_return_codes}'. "
+                        f"Actual return code: '{command_output.exit_code}'")
+
+    if command_output.exit_code != 0:
+        logger.info(f"Return code '{command_output.exit_code}' fits to the expected return code.")
+
+    return command_output.stdout
+
 
 class SSHCommandOutput:
     def __init__(self, exec_mode, stdin, stdout, stderr,
@@ -522,9 +552,15 @@ class SubprocessCommandOutput:
 
                 while True:
 
+                    select_fds = [master_fd]
+                    stdin_fd = None
+                    if interaction_mode == InteractionMode.PROCESS_INPUT and common.has_fileno(sys.stdin):
+                        stdin_fd = sys.stdin.fileno()
+                        select_fds.append(stdin_fd)
+
                     try:
 
-                        r, _, e = select.select([master_fd, sys.stdin], [], [], 0.05)
+                        r, _, e = select.select(select_fds, [], [], 0.05)
                     except select.error as e:
 
                         if e[0] != errno.EINTR: raise
@@ -565,7 +601,7 @@ class SubprocessCommandOutput:
                                 if decoded_output and decoded_output != "":
                                     self.stdout=self.stdout + decoded_output
 
-                    if sys.stdin in r and interaction_mode == InteractionMode.PROCESS_INPUT:
+                    if stdin_fd in r:
 
                         x = os.read(sys.stdin.fileno(), 10240)
                         #logger.info("input x - " + str(x) + ";\r")
@@ -590,14 +626,20 @@ class SubprocessCommandOutput:
 
                 while True:
 
+                    stdout_fd = sub_process.stdout.fileno()
+                    stderr_fd = sub_process.stderr.fileno()
+                    select_fds = [stdout_fd, stderr_fd]
+                    stdin_fd = None
+                    if interaction_mode == InteractionMode.PROCESS_INPUT and common.has_fileno(sys.stdin):
+                        stdin_fd = sys.stdin.fileno()
+                        select_fds.append(stdin_fd)
+
                     try:
-                        r, _, e = select.select([sub_process.stdout.fileno(),
-                                                 sub_process.stderr.fileno(),
-                                                 sys.stdin], [], [])
+                        r, _, e = select.select(select_fds, [], [])
                     except select.error as e:
                         if e[0] != errno.EINTR: raise
 
-                    if sub_process.stdout.fileno() in r:
+                    if stdout_fd in r:
 
                         output = sub_process.stdout.read1()
 
@@ -635,7 +677,7 @@ class SubprocessCommandOutput:
                                 if decoded_output and decoded_output != "":
                                     self.stdout=self.stdout + decoded_output
 
-                    if sub_process.stderr.fileno() in r:
+                    if stderr_fd in r:
 
                         error = sub_process.stderr.read1()
 
@@ -671,7 +713,7 @@ class SubprocessCommandOutput:
                                 if decoded_error and decoded_error != "":
                                     self.stderr=self.stderr + decoded_error
 
-                    if sys.stdin in r and interaction_mode == InteractionMode.PROCESS_INPUT:
+                    if stdin_fd in r:
                         x = os.read(sys.stdin.fileno(), 10240)
                         #logger.info("input x - " + str(x) + ";\r")
                         if len(x) == 0:
@@ -985,6 +1027,34 @@ class Task:
         logger.info(f"Finished the task '{self.__name}'.");
         logger.info("-------------------------------------")
 
+    def __run_subprocess(self,
+                         cmd,
+                         timeout,
+                         substitute_params,
+                         shell,
+                         exec_mode,
+                         communication_mode,
+                         avoid_printing_command,
+                         avoid_printing_command_reason,
+                         avoid_printing_command_output,
+                         avoid_printing_command_output_reason,
+                         interaction_mode):
+        process = Subprocess()
+        return process.exec_subprocess(cmd,
+                                       timeout,
+                                       substitute_params,
+                                       shell = shell,
+                                       exec_mode = _resolve_execution_mode(exec_mode),
+                                       communication_mode = _resolve_communication_mode(communication_mode),
+                                       master_fd = Task.__master_fd,
+                                       slave_fd = Task.__slave_fd,
+                                       params = self.__dict__,
+                                       avoid_printing_command = avoid_printing_command,
+                                       avoid_printing_command_reason = avoid_printing_command_reason,
+                                       avoid_printing_command_output = avoid_printing_command_output,
+                                       avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+                                       interaction_mode = _resolve_interaction_mode(interaction_mode))
+
     def subprocess_must_succeed(self,
                                 cmd,
                                 timeout = 0,
@@ -998,39 +1068,18 @@ class Task:
                                 avoid_printing_command_output = False,
                                 avoid_printing_command_output_reason = "The command output contains a sensitive information",
                                 interaction_mode = None):
-        if exec_mode == None:
-            exec_mode = Config.get_default_execution_mode()
-
-        if communication_mode == None:
-            communication_mode = Config.get_default_communication_mode()
-
-        if interaction_mode == None:
-            interaction_mode = Config.get_default_interaction_mode()
-
-        process = Subprocess()
-        command_output = process.exec_subprocess(cmd,
-                                                 timeout,
-                                                 substitute_params,
-                                                 shell = shell,
-                                                 exec_mode = exec_mode,
-                                                 communication_mode = communication_mode,
-                                                 master_fd = Task.__master_fd,
-                                                 slave_fd = Task.__slave_fd,
-                                                 params = self.__dict__,
-                                                 avoid_printing_command = avoid_printing_command,
-                                                 avoid_printing_command_reason = avoid_printing_command_reason,
-                                                 avoid_printing_command_output = avoid_printing_command_output,
-                                                 avoid_printing_command_output_reason = avoid_printing_command_output_reason,
-                                                 interaction_mode = interaction_mode)
-
-        if not command_output.exit_code in expected_return_codes:
-            raise Exception(f"Subprocess should succeed! Expected return codes are: '{expected_return_codes}'. "
-                            f"Actual return code: '{command_output.exit_code}'")
-        else:
-            if command_output.exit_code != 0:
-                logger.info(f"Return code '{command_output.exit_code}' fits to the expected return code.")
-
-            return command_output.stdout
+        command_output = self.__run_subprocess(cmd,
+                                               timeout,
+                                               substitute_params,
+                                               shell,
+                                               exec_mode,
+                                               communication_mode,
+                                               avoid_printing_command,
+                                               avoid_printing_command_reason,
+                                               avoid_printing_command_output,
+                                               avoid_printing_command_output_reason,
+                                               interaction_mode)
+        return _check_expected_return_code(command_output, expected_return_codes, "Subprocess should succeed!")
 
     def exec_subprocess(self,
                         cmd,
@@ -1044,32 +1093,17 @@ class Task:
                         avoid_printing_command_output = False,
                         avoid_printing_command_output_reason = "The command output contains a sensitive information",
                         interaction_mode = None):
-        if exec_mode == None:
-            exec_mode = Config.get_default_execution_mode()
-
-        if communication_mode == None:
-            communication_mode = Config.get_default_communication_mode()
-
-        if interaction_mode == None:
-            interaction_mode = Config.get_default_interaction_mode()
-
-        process = Subprocess()
-        command_output = process.exec_subprocess(cmd,
-                                                 timeout,
-                                                 substitute_params,
-                                                 shell = shell,
-                                                 exec_mode = exec_mode,
-                                                 master_fd = Task.__master_fd,
-                                                 slave_fd = Task.__slave_fd,
-                                                 communication_mode = communication_mode,
-                                                 params = self.__dict__,
-                                                 avoid_printing_command = avoid_printing_command,
-                                                 avoid_printing_command_reason = avoid_printing_command_reason,
-                                                 avoid_printing_command_output = avoid_printing_command_output,
-                                                 avoid_printing_command_output_reason = avoid_printing_command_output_reason,
-                                                 interaction_mode = interaction_mode)
-
-        return command_output
+        return self.__run_subprocess(cmd,
+                                     timeout,
+                                     substitute_params,
+                                     shell,
+                                     exec_mode,
+                                     communication_mode,
+                                     avoid_printing_command,
+                                     avoid_printing_command_reason,
+                                     avoid_printing_command_output,
+                                     avoid_printing_command_output_reason,
+                                     interaction_mode)
 
     def ensure_docker_image(self, image_alias):
         from paf import docker_runtime
@@ -1126,15 +1160,31 @@ class Task:
             avoid_printing_command_output = avoid_printing_command_output,
             avoid_printing_command_output_reason = avoid_printing_command_output_reason,
             interaction_mode = interaction_mode)
+        return _check_expected_return_code(command_output, expected_return_codes, "Docker subprocess should succeed!")
 
-        if not command_output.exit_code in expected_return_codes:
-            raise Exception(f"Docker subprocess should succeed! Expected return codes are: '{expected_return_codes}'. "
-                            f"Actual return code: '{command_output.exit_code}'")
-        else:
-            if command_output.exit_code != 0:
-                logger.info(f"Return code '{command_output.exit_code}' fits to the expected return code.")
-
-            return command_output.stdout
+    def __run_ssh_command(self,
+                          cmd,
+                          host,
+                          user,
+                          port,
+                          password,
+                          key_filename,
+                          timeout,
+                          substitute_params,
+                          exec_mode,
+                          jumphost,
+                          passphrase,
+                          avoid_printing_command,
+                          avoid_printing_command_reason,
+                          avoid_printing_command_output,
+                          avoid_printing_command_output_reason,
+                          interaction_mode):
+        return self.__ssh_connection_cache.exec_command(cmd, host, user, port,
+            password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
+            exec_mode = _resolve_execution_mode(exec_mode), params = self.__dict__, jumphost = jumphost, passphrase = passphrase,
+            avoid_printing_command = avoid_printing_command, avoid_printing_command_reason = avoid_printing_command_reason,
+            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+            interaction_mode = _resolve_interaction_mode(interaction_mode))
 
     def ssh_command_must_succeed(self,
                              cmd,
@@ -1154,27 +1204,12 @@ class Task:
                              avoid_printing_command_output = False,
                              avoid_printing_command_output_reason = "The command output contains a sensitive information",
                              interaction_mode = None):
-        if exec_mode == None:
-            exec_mode = Config.get_default_execution_mode()
-
-        if interaction_mode == None:
-            interaction_mode = Config.get_default_interaction_mode()
-
-        command_output = self.__ssh_connection_cache.exec_command(cmd, host, user, port,
-            password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
-            exec_mode = exec_mode, params = self.__dict__, jumphost = jumphost, passphrase = passphrase,
-            avoid_printing_command = avoid_printing_command, avoid_printing_command_reason = avoid_printing_command_reason,
-            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason,
-            interaction_mode = interaction_mode)
-
-        if not command_output.exit_code in expected_return_codes:
-            raise Exception(f"SSH command should succeed! Expected return codes are: '{expected_return_codes}'. "
-                            f"Actual return code: '{command_output.exit_code}'")
-        else:
-            if command_output.exit_code != 0:
-                logger.info(f"Return code '{command_output.exit_code}' fits to the expected return code.")
-
-            return command_output.stdout
+        command_output = self.__run_ssh_command(cmd, host, user, port, password, key_filename, timeout,
+                                                substitute_params, exec_mode, jumphost, passphrase,
+                                                avoid_printing_command, avoid_printing_command_reason,
+                                                avoid_printing_command_output, avoid_printing_command_output_reason,
+                                                interaction_mode)
+        return _check_expected_return_code(command_output, expected_return_codes, "SSH command should succeed!")
 
     def exec_ssh_command(self,
                      cmd,
@@ -1193,20 +1228,11 @@ class Task:
                      avoid_printing_command_output = False,
                      avoid_printing_command_output_reason = "The command output contains a sensitive information",
                      interaction_mode = None):
-        if exec_mode == None:
-            exec_mode = Config.get_default_execution_mode()
-
-        if interaction_mode == None:
-            interaction_mode = Config.get_default_interaction_mode()
-
-        command_output = self.__ssh_connection_cache.exec_command(cmd, host, user, port,
-            password = password, key_filename = key_filename, timeout = timeout, substitute_params = substitute_params,
-            exec_mode = exec_mode, params = self.__dict__, jumphost = jumphost, passphrase = passphrase,
-            avoid_printing_command = avoid_printing_command, avoid_printing_command_reason = avoid_printing_command_reason,
-            avoid_printing_command_output = avoid_printing_command_output, avoid_printing_command_output_reason = avoid_printing_command_output_reason,
-            interaction_mode = interaction_mode)
-
-        return command_output
+        return self.__run_ssh_command(cmd, host, user, port, password, key_filename, timeout,
+                                      substitute_params, exec_mode, jumphost, passphrase,
+                                      avoid_printing_command, avoid_printing_command_reason,
+                                      avoid_printing_command_output, avoid_printing_command_output_reason,
+                                      interaction_mode)
 
     def get_name(self):
         return self.__name
