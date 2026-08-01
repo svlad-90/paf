@@ -10,6 +10,7 @@ PyYAML = ">=5.4.1"
 jsonschema = ">=4.0.0"
 
 [dev-packages] # Here goes your package requirements for developing the application and its versions (which packages you will use when developing the application)
+pytest = ">=8.0.0"
 
 [requires] # Here goes your required Python version.
 python_version = "3"

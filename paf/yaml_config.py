@@ -14,6 +14,108 @@ from jsonschema.exceptions import best_match
 from paf.paf_impl import logger
 
 
+DOCKER_IMAGE_SCHEMA = {
+    "type": "object",
+    "required": ["image"],
+    "properties": {
+        "image": {"type": "string", "minLength": 1},
+        "dockerfile": {"type": "string", "minLength": 1},
+        "context": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1},
+        "network": {"type": "string", "minLength": 1},
+        "build_args": {
+            "type": "object",
+            "additionalProperties": {
+                "type": ["string", "number", "boolean"],
+            },
+        },
+    },
+    "additionalProperties": False,
+}
+
+
+DOCKER_CONTAINER_SCHEMA = {
+    "type": "object",
+    "required": ["image"],
+    "properties": {
+        "image": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "workdir": {"type": "string"},
+        "user": {"type": "string"},
+        "privileged": {"type": "boolean"},
+        "env": {
+            "type": "object",
+            "additionalProperties": {
+                "type": ["string", "number", "boolean"],
+            },
+        },
+        "mounts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["source", "target"],
+                "properties": {
+                    "source": {"type": "string"},
+                    "target": {"type": "string"},
+                    "mode": {"enum": ["ro", "rw"]},
+                },
+                "additionalProperties": False,
+            },
+        },
+        "ports": {
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "object",
+                        "required": ["host", "container"],
+                        "properties": {
+                            "host": {"type": ["string", "number"]},
+                            "container": {"type": ["string", "number"]},
+                            "protocol": {"enum": ["tcp", "udp"]},
+                        },
+                        "additionalProperties": False,
+                    },
+                ],
+            },
+        },
+        "devices": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "extra_args": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "additionalProperties": False,
+}
+
+
+BUILTIN_CASE_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "docker": {
+            "type": "object",
+            "properties": {
+                "images": {
+                    "type": "object",
+                    "additionalProperties": DOCKER_IMAGE_SCHEMA,
+                },
+                "containers": {
+                    "type": "object",
+                    "additionalProperties": DOCKER_CONTAINER_SCHEMA,
+                },
+            },
+            "additionalProperties": False,
+        },
+    },
+    "additionalProperties": True,
+}
+
+
 DOMAIN_DESCRIPTOR_SCHEMA = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -46,24 +148,7 @@ DOMAIN_DESCRIPTOR_SCHEMA = {
             "properties": {
                 "images": {
                     "type": "object",
-                    "additionalProperties": {
-                        "type": "object",
-                        "required": ["image"],
-                        "properties": {
-                            "image": {"type": "string", "minLength": 1},
-                            "dockerfile": {"type": "string", "minLength": 1},
-                            "context": {"type": "string", "minLength": 1},
-                            "target": {"type": "string", "minLength": 1},
-                            "network": {"type": "string", "minLength": 1},
-                            "build_args": {
-                                "type": "object",
-                                "additionalProperties": {
-                                    "type": ["string", "number", "boolean"],
-                                },
-                            },
-                        },
-                        "additionalProperties": False,
-                    },
+                    "additionalProperties": DOCKER_IMAGE_SCHEMA,
                 },
             },
             "additionalProperties": False,
@@ -309,6 +394,7 @@ def resolve_schema_paths(config, domains, explicit_schema_paths):
 
 
 def validate_case_config(config, schema_paths):
+    _validate_with_schema(config, BUILTIN_CASE_SCHEMA, "Built-in YAML schema")
     for schema_path in schema_paths:
         logger.info(f"Validate YAML config with schema '{schema_path}'")
         schema = load_yaml_file(schema_path)

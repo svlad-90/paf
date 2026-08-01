@@ -509,6 +509,10 @@ schema, PAF validates the case with that schema. PAF schemas are JSON Schema
 documents. They may be stored as `.json`, `.yaml`, or `.yml`; YAML is
 recommended for readability.
 
+PAF also validates built-in case sections before domain schemas are applied.
+For example, `docker.images` and `docker.containers` are owned by PAF itself;
+domain schemas should not duplicate those definitions.
+
 `domain.yaml` is validated by PAF before registration. The descriptor supports
 the following fields:
 
@@ -565,6 +569,12 @@ self.docker_subprocess_must_succeed("zephyr-build", "west build ...")
 If the selected image is missing, PAF builds it from the configured
 `dockerfile` and `context`. Docker commands are still logged before and after
 PAF parameter substitution.
+
+Run the PAF unit tests with:
+
+```bash
+python -m pytest -q
+```
 
 Python modules loaded from `--import-module-dir` are addressable both by the
 legacy basename alias and by dotted aliases derived from their import root. For
