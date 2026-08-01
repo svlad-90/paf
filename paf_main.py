@@ -8,6 +8,7 @@ import re
 from argparse import ArgumentParser
 
 from paf import paf_impl
+from paf import yaml_config
 from paf.paf_impl import logger
 
 def main():
@@ -20,6 +21,12 @@ def main():
                         help="phases to be executed", metavar="PHASE", action="append")
     parser.add_argument("-c", "--config", dest="configs",
                         help="configuration files", metavar="CONFIG", action="append")
+    parser.add_argument("-yc", "--yaml-config", dest="yaml_configs",
+                        help="YAML case configuration files", metavar="YAML_CONFIG", action="append")
+    parser.add_argument("-ys", "--yaml-schema", dest="yaml_schemas",
+                        help="YAML case schema files", metavar="YAML_SCHEMA", action="append")
+    parser.add_argument("-yp", "--yaml-parameter", dest="yaml_parameters",
+                        help="YAML case override in path=value form", metavar="YAML_PARAM", action="append")
     parser.add_argument("-p", "--parameter", dest="parameters",
                         help="environment variable", metavar="ENV_VAR", action="append")
     parser.add_argument("-imd", "--import-module-dir", dest="import_module_dirs",
@@ -37,6 +44,8 @@ def main():
     import_module_dirs = args.import_module_dirs
     if import_module_dirs:
         execution_context.import_modules(import_module_dirs)
+
+    yaml_domains = yaml_config.discover_domains(import_module_dirs)
 
     # From the command line parse the elements, which we need to execute
     tasks = args.tasks
@@ -59,6 +68,22 @@ def main():
     if configs:
         for config_path in configs:
             execution_context.parse_config(config_path, execution_context, environment)
+
+    if args.yaml_configs:
+        case_config = yaml_config.load_case_config(args.yaml_configs, args.yaml_parameters)
+        schema_paths = yaml_config.resolve_schema_paths(case_config, yaml_domains, args.yaml_schemas)
+        yaml_config.validate_case_config(case_config, schema_paths)
+        generated_root = args.log_dir or ".paf"
+        generated_config_path = yaml_config.write_expanded_config(case_config, generated_root)
+
+        environment.setYamlConfig(case_config)
+        environment.setVariableValue("YAML_CONF_FILE", generated_config_path)
+        environment.setVariableValue("YAML_CONF_SOURCE_FILES", " ".join(args.yaml_configs))
+        if schema_paths:
+            environment.setVariableValue("YAML_CONF_SCHEMA_FILES", " ".join(schema_paths))
+
+        for name, value in yaml_config.project_config(case_config).items():
+            environment.setVariableValue(name, value)
 
     # From the command line parse parameters
     parameters = args.parameters

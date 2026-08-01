@@ -5,6 +5,8 @@ Created on Dec 28, 2021
 '''
 
 from collections import OrderedDict
+import copy
+import json
 import paramiko
 import xml.etree.ElementTree as ET
 import logging
@@ -876,6 +878,7 @@ class Environment:
 
     def __init__(self):
         self.__variables = {}
+        self.__yaml_config = {}
 
     def deleteVariableValue(self, key):
         self.__variables.pop(key, None)
@@ -890,6 +893,12 @@ class Environment:
 
     def getVariables(self):
         return self.__variables
+
+    def setYamlConfig(self, config):
+        self.__yaml_config = copy.deepcopy(config)
+
+    def getYamlConfig(self):
+        return copy.deepcopy(self.__yaml_config)
 
     def __is_sensitive_variable(self, key):
         normalized_key = key.upper()
@@ -937,6 +946,18 @@ class Task:
 
     def get_environment_param(self, param_name, default_value = None):
         return self.__environment.getVariableValue(param_name, default_value = default_value)
+
+    def get_yaml_config(self):
+        yaml_config = self.__environment.getYamlConfig()
+        if yaml_config:
+            return yaml_config
+
+        yaml_config_file = self.get_environment_param("YAML_CONF_FILE")
+        if not yaml_config_file:
+            return {}
+
+        with open(yaml_config_file, "r", encoding="utf-8") as stream:
+            return json.load(stream)
 
     def set_environment_param(self, param_name, param_value):
         return self.__environment.setVariableValue(param_name, param_value)

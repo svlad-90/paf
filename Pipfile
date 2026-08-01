@@ -6,6 +6,8 @@ name = "pypi"
 [packages] # Here goes your package requirements for running the application and its versions (which packages you will use when running the application).
 paramiko = ">=3.0.0"
 coloredlogs = ">=15.0.1"
+PyYAML = ">=5.4.1"
+jsonschema = ">=4.0.0"
 
 [dev-packages] # Here goes your package requirements for developing the application and its versions (which packages you will use when developing the application)
 

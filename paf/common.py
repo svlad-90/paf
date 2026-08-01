@@ -77,12 +77,13 @@ def bytes_to_read(input_):
         return struct.unpack("h", fionread)[0]
     return 1
 
-def load_module(absolute_path):
+def load_module(absolute_path, module_name = None):
 
     print(f"Attempt to load module - {absolute_path}")
 
     import importlib.util
-    module_name, _ = os.path.splitext(os.path.split(absolute_path)[-1])
+    if module_name == None:
+        module_name, _ = os.path.splitext(os.path.split(absolute_path)[-1])
     try:
         spec = importlib.util.spec_from_file_location(module_name, absolute_path)
         py_mod = importlib.util.module_from_spec(spec)
@@ -101,10 +102,32 @@ def load_module(absolute_path):
         print("Could not directly load module, including dir: {}".format(module_root))
     return module_name, py_mod
 
-def load_all_modules_in_dir(module_root_dir):
+def __is_valid_module_name(module_name):
+    return all(part.isidentifier() for part in module_name.split("."))
+
+def __module_aliases(module_root_dir, found_python_file):
+    module_basename, _ = os.path.splitext(os.path.split(found_python_file)[-1])
+    relative_path, _ = os.path.splitext(os.path.relpath(found_python_file, module_root_dir))
+    relative_module_name = relative_path.replace(os.sep, ".")
+    root_module_name = os.path.basename(os.path.abspath(module_root_dir))
+
+    result = [module_basename]
+    if __is_valid_module_name(relative_module_name):
+        result.append(relative_module_name)
+
+    rooted_module_name = f"{root_module_name}.{relative_module_name}"
+    if __is_valid_module_name(rooted_module_name):
+        result.append(rooted_module_name)
+
+    return list(dict.fromkeys(result))
+
+def load_all_modules_in_dir(module_root_dir, base_module_root_dir = None):
 
     if not os.path.isdir(module_root_dir):
         raise Exception(f"Provided path '{module_root_dir}' is not a directory!")
+
+    if base_module_root_dir == None:
+        base_module_root_dir = module_root_dir
 
     sys.path.insert(0, module_root_dir)
 
@@ -114,15 +137,17 @@ def load_all_modules_in_dir(module_root_dir):
 
     for found_python_file in found_python_files:
         if os.path.isfile(found_python_file) and not found_python_file.endswith('__init__.py'):
-            loaded_module_name, loaded_module = load_module(found_python_file)
+            aliases = __module_aliases(base_module_root_dir, found_python_file)
+            loaded_module_name, loaded_module = load_module(found_python_file, aliases[-1])
 
             if loaded_module:
-                result[loaded_module_name] = loaded_module
+                for alias in aliases:
+                    result[alias] = loaded_module
 
     for file in sorted(os.listdir(module_root_dir)):
         d = os.path.join(module_root_dir, file)
         if os.path.isdir(d) and d != os.path.join(module_root_dir, "__pycache__"):
-            result.update(load_all_modules_in_dir(d))
+            result.update(load_all_modules_in_dir(d, base_module_root_dir))
 
     return result
 
@@ -133,8 +158,11 @@ def load_all_modules_in_dirs(module_paths):
     return result
 
 def create_class_instance(full_class_name, loaded_modules):
-    _, module_name, class_name = full_class_name.rsplit('.', 2)
+    module_name, class_name = full_class_name.rsplit('.', 1)
     module = loaded_modules.get(module_name)
+    if not module:
+        module_name = module_name.rsplit('.', 1)[-1]
+        module = loaded_modules.get(module_name)
 
     result = None
 

@@ -31,6 +31,8 @@ On top of that, it requires the following set of external Python modules:
 |---|---|
 |[coloredlogs](https://github.com/xolox/python-coloredlogs)|15.0.1+|
 |[paramiko](https://docs.paramiko.org/en/stable/)|3.0.0+|
+|[PyYAML](https://pyyaml.org/)|5.4.1+|
+|[jsonschema](https://python-jsonschema.readthedocs.io/)|4.0.0+|
 
 The same list of dependencies can be found [here](./Pipfile). Check the packages section.
 
@@ -41,6 +43,8 @@ To install the dependencies, you can choose one of the following ways:
   ```bash
   pip install coloredlogs
   pip install paramiko
+  pip install PyYAML
+  pip install jsonschema
   ```
 
   The benefit of this option is that you will not need t to execute any additional commands on your system before running PAF. The con is that your system must have all the mentioned dependencies on it.
@@ -70,6 +74,11 @@ That should be enough to proceed.
 5. Create an XML file with any name in any location. This file will contain parameters and declarations of scenarios and phases. Let's call it scenarios.xml and place it inside the "./paf/my_scenarios/scenarios.xml" folder.
 6. Fill the file with the content. More information on how to do it is [located here](#the-content-of-the-xml-configuration-file)
 7. Once both Python code and XML configuration are ready, start the paf tool, feeding your developed artifacts to it. More information on how to do it is [located here](#how-to-execute-paf-scenarios)
+
+PAF can also load structured YAML case configuration on top of the XML
+execution graph. YAML case files are layered in command-line order, validated
+with JSON Schema, projected into `YAML_CONF_*` environment variables, and saved
+as an expanded JSON file pointed to by `YAML_CONF_FILE`.
 
 ----
 
@@ -457,6 +466,9 @@ Currently, the tool supports the following set of command line options:
 |-s, --scenario|Scenario to be executed|Multiple|
 |-ph, --phase|Phase to be executed|Multiple|
 |-c, --config|Apply this XML configuration file|Multiple|
+|-yc, --yaml-config|Apply this YAML case configuration file|Multiple|
+|-ys, --yaml-schema|Validate the merged YAML case with this schema|Multiple|
+|-yp, --yaml-parameter|Override a YAML case value using path=value syntax|Multiple|
 |-p, --parameter|Add parameter to the execution context|Multiple|
 |-imd, --import_module_dir|Load all Python modules from the specified directory recursively. It also adds specified directories to the sys.path|Multiple|
 |-ld, --log-dir|Store the output to the specified directory|Last win|
@@ -466,6 +478,42 @@ The typical command to execute the PAF scenario would be:
 ```bash
 python ./paf/paf_main.py -imd ./paf/my_scenarios -c ./paf/my_scenarios/scenarios.xml -s echo_test -p ECHO_PHRASE="Overriden echo phrase!" -ld="./"
 ```
+
+YAML case configuration can be loaded together with the XML execution graph:
+
+```bash
+python ./paf/paf_main.py \
+  -imd ./paf/my_scenarios \
+  -c ./paf/my_scenarios/scenarios.xml \
+  -yc ./cases/base.yaml \
+  -yc ./cases/pr103.yaml \
+  -yp validation.timeout_sec=120 \
+  -s default \
+  -ld ./logs
+```
+
+Multiple YAML files are deep-merged in command-line order. Later files replace
+earlier scalar and list values, while object values are merged recursively.
+`--yaml-parameter` overrides are applied after the files are merged and before
+schema validation.
+
+PAF discovers optional automation domain descriptors named `domain.yaml` under
+the imported module directories. If the merged YAML case declares
+`case.domain` or `uses[].domain`, and the matching domain descriptor points to a
+schema, PAF validates the case with that schema. PAF schemas are JSON Schema
+documents. They may be stored as `.json`, `.yaml`, or `.yml`; YAML is
+recommended for readability.
+
+Python modules loaded from `--import-module-dir` are addressable both by the
+legacy basename alias and by dotted aliases derived from their import root. For
+example, `--import-module-dir ./paf_workspace` makes `tasks.py` addressable as
+both `tasks` and `paf_workspace.tasks`. Prefer dotted aliases when several
+module directories may contain files with the same basename.
+
+After validation, PAF projects the structured YAML case into deterministic
+`YAML_CONF_*` environment variables and stores the expanded case as JSON. The
+path to that JSON file is available as `YAML_CONF_FILE`, and task code can read
+the parsed object with `self.get_yaml_config()`.
 
 ----
 
