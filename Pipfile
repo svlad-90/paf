@@ -12,6 +12,8 @@ jsonschema = ">=4.0.0"
 [dev-packages] # Here goes your package requirements for developing the application and its versions (which packages you will use when developing the application)
 pytest = ">=8.0.0"
 pytest-cov = ">=5.0.0"
+flake8 = ">=7.0.0"
+mypy = ">=1.8.0"
 
 [requires] # Here goes your required Python version.
 python_version = "3"

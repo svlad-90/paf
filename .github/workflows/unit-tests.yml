@@ -30,6 +30,15 @@ jobs:
       - name: Install dependencies
         run: pipenv sync --dev
 
+      - name: Run flake8
+        run: pipenv run python -m flake8 .
+
+      - name: Run mypy
+        run: >
+          pipenv run python -m mypy
+          paf/docker_runtime.py
+          paf/yaml_config.py
+
       - name: Run unit tests
         run: pipenv run python -m pytest -q
 

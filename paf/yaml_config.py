@@ -6,6 +6,7 @@ import copy
 import json
 import os
 import re
+from typing import Any
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -197,7 +198,7 @@ def parse_yaml_parameter(parameter):
 
 
 def _parse_path(path):
-    result = []
+    result: list[str | int] = []
     for part in path.split("."):
         if not part:
             raise Exception(f"Wrong YAML parameter path: '{path}'")
@@ -254,7 +255,7 @@ def apply_yaml_parameter(config, path, value):
 
 
 def load_case_config(config_paths, yaml_parameters):
-    merged = {}
+    merged: dict[str, Any] = {}
     for config_path in config_paths or []:
         logger.info(f"Attempt to parse YAML config file '{config_path}'")
         merged = deep_merge(merged, load_yaml_file(config_path))
@@ -353,7 +354,7 @@ def _case_domain_names(config):
 
 
 def apply_domain_defaults(config, domains):
-    default_config = {"docker": {"images": {}}}
+    default_config: dict[str, Any] = {"docker": {"images": {}}}
 
     for domain_name in _case_domain_names(config):
         domain_descriptor = domains.get(domain_name)
@@ -427,7 +428,7 @@ def _project_value(value, path_elements, prefix, variables):
 
 
 def project_config(config, prefix="YAML_CONF_"):
-    variables = {}
+    variables: dict[str, str] = {}
     _project_value(config, [], prefix, variables)
     return variables
 
