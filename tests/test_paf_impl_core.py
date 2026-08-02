@@ -180,6 +180,8 @@ def test_task_docker_wrappers_use_docker_runtime(monkeypatch):
     assert task.docker_exec_subprocess("container", "echo ok").stdout == "docker-out"
     assert task.docker_subprocess_must_succeed("container", "echo ok") == "docker-out"
     assert calls[0][0][0] == ["docker", "container", "echo ok"]
+    assert calls[0][1]["shell"] is False
+    assert calls[0][1]["avoid_printing_command"] is False
 
 
 def test_task_helpers_and_assertions():
