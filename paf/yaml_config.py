@@ -151,6 +151,10 @@ DOMAIN_DESCRIPTOR_SCHEMA = {
                     "type": "object",
                     "additionalProperties": DOCKER_IMAGE_SCHEMA,
                 },
+                "containers": {
+                    "type": "object",
+                    "additionalProperties": DOCKER_CONTAINER_SCHEMA,
+                },
             },
             "additionalProperties": False,
         },
@@ -354,7 +358,7 @@ def _case_domain_names(config):
 
 
 def apply_domain_defaults(config, domains):
-    default_config: dict[str, Any] = {"docker": {"images": {}}}
+    default_config: dict[str, Any] = {"docker": {"images": {}, "containers": {}}}
 
     for domain_name in _case_domain_names(config):
         domain_descriptor = domains.get(domain_name)
@@ -364,6 +368,9 @@ def apply_domain_defaults(config, domains):
         required_images = domain_descriptor.get("requires", {}).get("images", {})
         for image_alias, image_config in required_images.items():
             default_config["docker"]["images"][image_alias] = image_config
+        required_containers = domain_descriptor.get("requires", {}).get("containers", {})
+        for container_alias, container_config in required_containers.items():
+            default_config["docker"]["containers"][container_alias] = container_config
 
     return deep_merge(default_config, config)
 

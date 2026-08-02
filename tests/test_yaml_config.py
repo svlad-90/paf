@@ -15,6 +15,12 @@ def test_apply_domain_defaults_then_case_overrides():
                         "context": ".",
                     },
                 },
+                "containers": {
+                    "builder-container": {
+                        "image": "builder",
+                        "workdir": "/workspace",
+                    },
+                },
             },
         },
     }
@@ -26,6 +32,12 @@ def test_apply_domain_defaults_then_case_overrides():
                     "image": "case/override:latest",
                 },
             },
+            "containers": {
+                "builder-container": {
+                    "image": "builder",
+                    "workdir": "/case-workspace",
+                },
+            },
         },
     }
 
@@ -34,6 +46,8 @@ def test_apply_domain_defaults_then_case_overrides():
     assert merged["docker"]["images"]["builder"]["image"] == "case/override:latest"
     assert merged["docker"]["images"]["builder"]["dockerfile"] == "Dockerfile"
     assert merged["docker"]["images"]["builder"]["context"] == "."
+    assert merged["docker"]["containers"]["builder-container"]["image"] == "builder"
+    assert merged["docker"]["containers"]["builder-container"]["workdir"] == "/case-workspace"
 
 
 def test_domain_yaml_parameter_updates_descriptor_before_validation():
@@ -190,7 +204,11 @@ def test_discover_domains_and_resolve_schema_paths(tmp_path):
         "requires:\n"
         "  images:\n"
         "    builder:\n"
-        "      image: default:latest\n",
+        "      image: default:latest\n"
+        "  containers:\n"
+        "    build:\n"
+        "      image: builder\n"
+        "      workdir: /workspace\n",
         encoding="utf-8",
     )
 
@@ -206,6 +224,7 @@ def test_discover_domains_and_resolve_schema_paths(tmp_path):
         str(schema),
     ]
     assert yaml_config.apply_domain_defaults(config, domains)["docker"]["images"]["builder"]["image"] == "override:latest"
+    assert yaml_config.apply_domain_defaults(config, domains)["docker"]["containers"]["build"]["workdir"] == "/workspace"
 
 
 def test_domain_resolution_rejects_missing_domain():
