@@ -48,7 +48,33 @@ def container_config(task, container_alias):
     config = containers.get(container_alias)
     if not config:
         raise Exception(f"Docker container alias '{container_alias}' is not defined")
-    return _substitute(task, _require_mapping(config, f"docker.containers.{container_alias}"))
+    docker_config = _docker_config(task)
+    merged = dict(_require_mapping(config, f"docker.containers.{container_alias}"))
+    merged["env"] = {
+        **_require_mapping(docker_config.get("env", {}), "docker.env"),
+        **_require_mapping(merged.get("env", {}), f"docker.containers.{container_alias}.env"),
+    }
+    merged["mounts"] = _merge_mounts(
+        docker_config.get("mounts", []),
+        merged.get("mounts", []),
+    )
+    return _substitute(task, merged)
+
+
+def _merge_mounts(default_mounts, container_mounts):
+    result = []
+    by_target = {}
+
+    for mount in list(default_mounts or []) + list(container_mounts or []):
+        mount = _require_mapping(mount, "docker.mounts")
+        target = _require_string(mount.get("target"), "mounts[].target")
+        if target in by_target:
+            result[by_target[target]] = mount
+        else:
+            by_target[target] = len(result)
+            result.append(mount)
+
+    return result
 
 
 def ensure_image(task, image_alias):

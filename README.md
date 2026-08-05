@@ -523,24 +523,42 @@ handler: tasks:XenZephyrDomain
 projection:
   prefix: YAML_CONF_
 requires:
+  env:
+    WORKSPACE_ROOT: /workspace
+  mounts:
+    - source: ${WORKSPACE_ROOT}
+      target: /workspace
+      mode: rw
   images:
     zephyr-xen:
       image: codex/zephyr-xen:latest
       dockerfile: codex_tools/environments/zephyr-xen/Dockerfile
       context: codex_tools/environments/zephyr-xen
+  containers:
+    zephyr-build:
+      image: zephyr-xen
+      workdir: /workspace
 ```
 
 Only `name` is required. `schema` points to the domain's case schema relative
 to the descriptor directory. `handler` is reserved for domain expanders.
 `projection.prefix` controls the environment variable prefix used for YAML
-projection and must be an uppercase shell-style name. `requires.images`
-declares image aliases needed by the domain and can bind those aliases to
-default Docker image build descriptions.
+projection and must be an uppercase shell-style name. `requires.images`,
+`requires.containers`, `requires.mounts`, and `requires.env` declare default
+Docker settings needed by the domain. Workspace-wide mounts and environment
+variables are applied to every selected container unless the case overrides
+them.
 
 Case YAML can define or override Docker images and container run profiles:
 
 ```yaml
 docker:
+  env:
+    WORKSPACE_ROOT: /workspace
+  mounts:
+    - source: ${WORKSPACE_ROOT}
+      target: /workspace
+      mode: rw
   images:
     zephyr-xen:
       image: codex/zephyr-xen:latest
@@ -551,10 +569,6 @@ docker:
     zephyr-build:
       image: zephyr-xen
       workdir: /workspace
-      mounts:
-        - source: ${WORKSPACE_ROOT}
-          target: /workspace
-          mode: rw
       env:
         ZEPHYR_BASE: /workspace/zephyr
 ```

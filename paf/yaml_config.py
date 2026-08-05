@@ -109,6 +109,13 @@ BUILTIN_CASE_SCHEMA = {
                     "type": "object",
                     "additionalProperties": DOCKER_CONTAINER_SCHEMA,
                 },
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": ["string", "number", "boolean"],
+                    },
+                },
+                "mounts": DOCKER_CONTAINER_SCHEMA["properties"]["mounts"],
             },
             "additionalProperties": False,
         },
@@ -155,6 +162,13 @@ DOMAIN_DESCRIPTOR_SCHEMA = {
                     "type": "object",
                     "additionalProperties": DOCKER_CONTAINER_SCHEMA,
                 },
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": ["string", "number", "boolean"],
+                    },
+                },
+                "mounts": DOCKER_CONTAINER_SCHEMA["properties"]["mounts"],
             },
             "additionalProperties": False,
         },
@@ -358,7 +372,14 @@ def _case_domain_names(config):
 
 
 def apply_domain_defaults(config, domains):
-    default_config: dict[str, Any] = {"docker": {"images": {}, "containers": {}}}
+    default_config: dict[str, Any] = {
+        "docker": {
+            "images": {},
+            "containers": {},
+            "env": {},
+            "mounts": [],
+        },
+    }
 
     for domain_name in _case_domain_names(config):
         domain_descriptor = domains.get(domain_name)
@@ -371,6 +392,10 @@ def apply_domain_defaults(config, domains):
         required_containers = domain_descriptor.get("requires", {}).get("containers", {})
         for container_alias, container_config in required_containers.items():
             default_config["docker"]["containers"][container_alias] = container_config
+        default_config["docker"]["env"].update(domain_descriptor.get("requires", {}).get("env", {}))
+        default_config["docker"]["mounts"].extend(
+            domain_descriptor.get("requires", {}).get("mounts", [])
+        )
 
     return deep_merge(default_config, config)
 

@@ -50,6 +50,45 @@ def test_apply_domain_defaults_then_case_overrides():
     assert merged["docker"]["containers"]["builder-container"]["workdir"] == "/case-workspace"
 
 
+def test_apply_domain_defaults_adds_workspace_wide_docker_defaults():
+    domains = {
+        "sample": {
+            "requires": {
+                "env": {
+                    "WORKSPACE_ROOT": "/workspace",
+                },
+                "mounts": [
+                    {
+                        "source": "/host/workspace",
+                        "target": "/workspace",
+                        "mode": "rw",
+                    },
+                ],
+            },
+        },
+    }
+    config = {
+        "case": {"name": "case", "domain": "sample"},
+        "docker": {
+            "env": {
+                "PAF_ROOT": "/workspace/.paf",
+            },
+        },
+    }
+
+    merged = yaml_config.apply_domain_defaults(config, domains)
+
+    assert merged["docker"]["env"]["WORKSPACE_ROOT"] == "/workspace"
+    assert merged["docker"]["env"]["PAF_ROOT"] == "/workspace/.paf"
+    assert merged["docker"]["mounts"] == [
+        {
+            "source": "/host/workspace",
+            "target": "/workspace",
+            "mode": "rw",
+        },
+    ]
+
+
 def test_domain_yaml_parameter_updates_descriptor_before_validation():
     descriptor: dict[str, Any] = {
         "name": "sample",

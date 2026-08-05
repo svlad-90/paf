@@ -94,6 +94,41 @@ def test_docker_run_command_uses_container_alias_and_mounts():
     assert "--pull=never" in cmd
 
 
+def test_docker_run_command_merges_workspace_wide_mounts_and_env():
+    task = FakeTask()
+    task.config["docker"]["mounts"] = [
+        {
+            "source": "${WORKSPACE_ROOT}",
+            "target": "/workspace",
+            "mode": "ro",
+        },
+        {
+            "source": "/host/cache",
+            "target": "/cache",
+            "mode": "rw",
+        },
+    ]
+    task.config["docker"]["env"] = {
+        "A": "workspace",
+        "GLOBAL": "1",
+    }
+    task.config["docker"]["containers"]["builder"]["mounts"] = [
+        {
+            "source": "${WORKSPACE_ROOT}",
+            "target": "/workspace",
+            "mode": "rw",
+        },
+    ]
+
+    cmd = docker_runtime.docker_run_command(task, "builder", "echo ok")
+
+    assert "type=bind,source=/host/workspace,target=/workspace" in cmd
+    assert "type=bind,source=/host/cache,target=/cache" in cmd
+    assert "A=B" in cmd
+    assert "GLOBAL=1" in cmd
+    assert all("/workspace,readonly" not in arg for arg in cmd)
+
+
 def test_ensure_image_builds_missing_image_from_alias():
     task = FakeTask(inspect_exit_code=1)
     task.config["docker"]["images"]["builder-img"].update(
