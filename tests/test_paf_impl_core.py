@@ -52,6 +52,32 @@ def test_environment_dump_masks_sensitive_values(monkeypatch):
     assert "export CUSTOM=<hidden>" in messages
 
 
+def test_task_start_can_hide_environment_dump_from_process_env(monkeypatch):
+    messages = []
+    monkeypatch.setattr(paf_impl.logger, "info", lambda msg, *args, **kwargs: messages.append(msg))
+    monkeypatch.setenv("PAF_HIDE_TASK_ENV", "1")
+
+    task = Task()
+    task.set_environment_param("NORMAL", "hello")
+    task.start()
+
+    assert "Starting the task ''." in messages
+    assert not any(message.startswith("export ") for message in messages)
+
+
+def test_task_start_can_hide_environment_dump_from_paf_parameter(monkeypatch):
+    messages = []
+    monkeypatch.setattr(paf_impl.logger, "info", lambda msg, *args, **kwargs: messages.append(msg))
+
+    task = Task()
+    task.set_environment_param("PAF_HIDE_TASK_ENV", "1")
+    task.set_environment_param("NORMAL", "hello")
+    task.start()
+
+    assert "Starting the task ''." in messages
+    assert not any(message.startswith("export ") for message in messages)
+
+
 def test_logger_file_paths_with_fake_file_logger(monkeypatch):
     calls = []
 

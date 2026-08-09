@@ -24,6 +24,10 @@ DOCKER_IMAGE_SCHEMA = {
         "context": {"type": "string", "minLength": 1},
         "target": {"type": "string", "minLength": 1},
         "network": {"type": "string", "minLength": 1},
+        "capabilities": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+        },
         "build_args": {
             "type": "object",
             "additionalProperties": {

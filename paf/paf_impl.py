@@ -1028,8 +1028,15 @@ class Task:
     def start(self):
 
         logger.info("-------------------------------------")
-        logger.info(f"Starting the task '{self.__name}'. Used environment:");
-        self.__environment.dump()
+        hide_task_env = (
+            os.environ.get("PAF_HIDE_TASK_ENV") == "1"
+            or self.__environment.getVariableValue("PAF_HIDE_TASK_ENV") == "1"
+        )
+        if hide_task_env:
+            logger.info(f"Starting the task '{self.__name}'.")
+        else:
+            logger.info(f"Starting the task '{self.__name}'. Used environment:");
+            self.__environment.dump()
 
         self.init()
         self.execute()
