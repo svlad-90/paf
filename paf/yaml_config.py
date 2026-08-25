@@ -15,7 +15,7 @@ from jsonschema.exceptions import best_match
 from paf.paf_impl import logger
 
 
-DOCKER_IMAGE_SCHEMA = {
+DOCKER_IMAGE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["image"],
     "properties": {
@@ -39,7 +39,7 @@ DOCKER_IMAGE_SCHEMA = {
 }
 
 
-DOCKER_CONTAINER_SCHEMA = {
+DOCKER_CONTAINER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["image"],
     "properties": {

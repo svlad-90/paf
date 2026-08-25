@@ -2,6 +2,12 @@
 Docker runtime helpers for PAF tasks.
 '''
 
+import os
+import re
+import subprocess
+import uuid
+from typing import Any
+
 from paf.paf_impl import CommunicationMode
 from paf.paf_impl import InteractionMode
 from paf.paf_impl import logger
@@ -62,8 +68,8 @@ def container_config(task, container_alias):
 
 
 def _merge_mounts(default_mounts, container_mounts):
-    result = []
-    by_target = {}
+    result: list[dict[str, Any]] = []
+    by_target: dict[str, int] = {}
 
     for mount in list(default_mounts or []) + list(container_mounts or []):
         mount = _require_mapping(mount, "docker.mounts")
@@ -172,6 +178,11 @@ def _device_args(devices):
     return result
 
 
+def _generated_container_name(container_alias):
+    safe_alias = re.sub(r"[^a-zA-Z0-9_.-]+", "-", container_alias).strip("-")
+    return f"paf-{safe_alias}-{os.getpid()}-{uuid.uuid4().hex[:12]}"
+
+
 def docker_run_command(task, container_alias, cmd):
     config = container_config(task, container_alias)
     image_alias = _require_string(config.get("image"), f"docker.containers.{container_alias}.image")
@@ -179,7 +190,10 @@ def docker_run_command(task, container_alias, cmd):
 
     result = ["docker", "run", "--rm"]
     if config.get("name"):
-        result.extend(["--name", str(config["name"])])
+        container_name = str(config["name"])
+    else:
+        container_name = _generated_container_name(container_alias)
+    result.extend(["--name", container_name])
     if config.get("privileged"):
         result.append("--privileged")
     if config.get("user"):
@@ -194,3 +208,19 @@ def docker_run_command(task, container_alias, cmd):
     result.extend(config.get("extra_args", []))
     result.extend([image, "/bin/bash", "-lc", cmd])
     return result
+
+
+def docker_run_container_name(command):
+    try:
+        name_index = command.index("--name")
+    except ValueError:
+        return None
+    if name_index + 1 >= len(command):
+        return None
+    return command[name_index + 1]
+
+
+def cleanup_container(name):
+    if not name:
+        return
+    subprocess.run(["docker", "rm", "-f", name], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
