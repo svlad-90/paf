@@ -178,9 +178,9 @@ def _device_args(devices):
     return result
 
 
-def _generated_container_name(container_alias):
-    safe_alias = re.sub(r"[^a-zA-Z0-9_.-]+", "-", container_alias).strip("-")
-    return f"paf-{safe_alias}-{os.getpid()}-{uuid.uuid4().hex[:12]}"
+def _generated_container_name(name):
+    safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "-", name).strip("-")
+    return f"paf-{safe_name}-{os.getpid()}-{uuid.uuid4().hex[:12]}"
 
 
 def docker_run_command(task, container_alias, cmd):
@@ -189,10 +189,7 @@ def docker_run_command(task, container_alias, cmd):
     image = ensure_image(task, image_alias)
 
     result = ["docker", "run", "--rm"]
-    if config.get("name"):
-        container_name = str(config["name"])
-    else:
-        container_name = _generated_container_name(container_alias)
+    container_name = _generated_container_name(str(config.get("name") or container_alias))
     result.extend(["--name", container_name])
     if config.get("privileged"):
         result.append("--privileged")

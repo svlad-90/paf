@@ -96,14 +96,16 @@ def test_docker_run_command_uses_container_alias_and_mounts():
     assert "--pull=never" in cmd
 
 
-def test_docker_run_command_uses_configured_container_name():
+def test_docker_run_command_decorates_configured_container_name():
     task = FakeTask()
     task.config["docker"]["containers"]["builder"]["name"] = "configured-builder"
 
     cmd = docker_runtime.docker_run_command(task, "builder", "echo ok")
 
-    assert cmd[cmd.index("--name") + 1] == "configured-builder"
-    assert docker_runtime.docker_run_container_name(cmd) == "configured-builder"
+    container_name = cmd[cmd.index("--name") + 1]
+    assert container_name.startswith("paf-configured-builder-")
+    assert container_name != "configured-builder"
+    assert docker_runtime.docker_run_container_name(cmd) == container_name
 
 
 def test_docker_run_container_name_handles_missing_name():
