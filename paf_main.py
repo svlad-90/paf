@@ -94,7 +94,7 @@ def main():
 
     if parameters:
         for parameter in parameters:
-            splited_parameter = re.compile("[ ]*=[ ]*").split(parameter)
+            splited_parameter = re.compile("[ ]*=[ ]*").split(parameter, maxsplit=1)
             if len(splited_parameter) == 2:
                 environment.setVariableValue(splited_parameter[0], splited_parameter[1])
 
