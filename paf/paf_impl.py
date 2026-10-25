@@ -21,6 +21,7 @@ import shlex
 import signal
 import errno
 import os
+import time
 import enum
 from datetime import datetime
 import re
@@ -547,6 +548,7 @@ class SubprocessCommandOutput:
         self.exit_code = 0
 
         exit_code = None
+        deadline = time.monotonic() + timeout if timeout and timeout > 0 else None
 
         if common.isatty(sys.stdin):
             oldtty = termios.tcgetattr(sys.stdin)
@@ -570,7 +572,13 @@ class SubprocessCommandOutput:
 
                     try:
 
-                        r, _, e = select.select(select_fds, [], [], 0.05)
+                        if deadline is not None:
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                sub_process.kill()
+                                exit_code = -9
+                                break
+                        r, _, e = select.select(select_fds, [], [], min(0.05, remaining) if deadline is not None else 0.05)
                     except select.error as e:
 
                         if e.errno != errno.EINTR:
@@ -645,8 +653,17 @@ class SubprocessCommandOutput:
                         stdin_fd = sys.stdin.fileno()
                         select_fds.append(stdin_fd)
 
+                    select_timeout = None
+                    if deadline is not None:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            sub_process.kill()
+                            exit_code = -9
+                            break
+                        select_timeout = min(0.05, remaining)
+
                     try:
-                        r, _, _ = select.select(select_fds, [], [])
+                        r, _, _ = select.select(select_fds, [], [], select_timeout)
                     except select.error as e:
                         if e.errno != errno.EINTR:
                             raise
@@ -1140,17 +1157,25 @@ class Task:
                                interaction_mode = None):
         from paf import docker_runtime
         docker_cmd = docker_runtime.docker_run_command(self, container_alias, cmd)
-        return self.exec_subprocess(docker_cmd,
-                                    timeout = timeout,
-                                    substitute_params = substitute_params,
-                                    shell = False,
-                                    exec_mode = exec_mode,
-                                    communication_mode = communication_mode,
-                                    avoid_printing_command = avoid_printing_command,
-                                    avoid_printing_command_reason = avoid_printing_command_reason,
-                                    avoid_printing_command_output = avoid_printing_command_output,
-                                    avoid_printing_command_output_reason = avoid_printing_command_output_reason,
-                                    interaction_mode = interaction_mode)
+        container_name = docker_runtime.docker_run_container_name(docker_cmd)
+        try:
+            result = self.exec_subprocess(docker_cmd,
+                                          timeout = timeout,
+                                          substitute_params = substitute_params,
+                                          shell = False,
+                                          exec_mode = exec_mode,
+                                          communication_mode = communication_mode,
+                                          avoid_printing_command = avoid_printing_command,
+                                          avoid_printing_command_reason = avoid_printing_command_reason,
+                                          avoid_printing_command_output = avoid_printing_command_output,
+                                          avoid_printing_command_output_reason = avoid_printing_command_output_reason,
+                                          interaction_mode = interaction_mode)
+        except:
+            docker_runtime.cleanup_container(container_name)
+            raise
+        if result.exit_code != 0:
+            docker_runtime.cleanup_container(container_name)
+        return result
 
     def docker_subprocess_must_succeed(self,
                                        container_alias,

@@ -210,6 +210,48 @@ def test_task_docker_wrappers_use_docker_runtime(monkeypatch):
     assert calls[0][1]["avoid_printing_command"] is False
 
 
+def test_task_docker_exec_subprocess_cleans_failed_container(monkeypatch):
+    class Output:
+        exit_code = 7
+        stdout = "docker-out"
+
+    task = Task()
+    cleanup_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "paf.docker_runtime.docker_run_command",
+        lambda task_arg, alias, cmd: ["docker", "run", "--rm", "--name", "container-name"],
+    )
+    monkeypatch.setattr("paf.docker_runtime.cleanup_container", cleanup_calls.append)
+    monkeypatch.setattr(task, "exec_subprocess", lambda *args, **kwargs: Output())
+
+    output = task.docker_exec_subprocess("container", "echo ok")
+
+    assert output.exit_code == 7
+    assert cleanup_calls == ["container-name"]
+
+
+def test_task_docker_exec_subprocess_cleans_container_on_exception(monkeypatch):
+    task = Task()
+    cleanup_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "paf.docker_runtime.docker_run_command",
+        lambda task_arg, alias, cmd: ["docker", "run", "--rm", "--name", "container-name"],
+    )
+    monkeypatch.setattr("paf.docker_runtime.cleanup_container", cleanup_calls.append)
+
+    def fail_exec(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(task, "exec_subprocess", fail_exec)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        task.docker_exec_subprocess("container", "echo ok")
+
+    assert cleanup_calls == ["container-name"]
+
+
 def test_task_helpers_and_assertions():
     task = Task()
     task.set_name("name")

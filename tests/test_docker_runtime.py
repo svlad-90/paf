@@ -78,6 +78,8 @@ def test_docker_run_command_uses_container_alias_and_mounts():
 
     assert task.commands == [["docker", "image", "inspect", "ubuntu:24.04"]]
     assert cmd[:3] == ["docker", "run", "--rm"]
+    name_index = cmd.index("--name")
+    assert cmd[name_index + 1].startswith("paf-builder-")
     assert "ubuntu:24.04" in cmd
     assert cmd[-3:] == ["/bin/bash", "-lc", "echo ok"]
     assert "--mount" in cmd
@@ -92,6 +94,44 @@ def test_docker_run_command_uses_container_alias_and_mounts():
     assert "--device" in cmd
     assert "/dev/kvm" in cmd
     assert "--pull=never" in cmd
+
+
+def test_docker_run_command_uses_configured_container_name():
+    task = FakeTask()
+    task.config["docker"]["containers"]["builder"]["name"] = "configured-builder"
+
+    cmd = docker_runtime.docker_run_command(task, "builder", "echo ok")
+
+    assert cmd[cmd.index("--name") + 1] == "configured-builder"
+    assert docker_runtime.docker_run_container_name(cmd) == "configured-builder"
+
+
+def test_docker_run_container_name_handles_missing_name():
+    assert docker_runtime.docker_run_container_name(["docker", "run", "--rm"]) is None
+    assert docker_runtime.docker_run_container_name(["docker", "run", "--name"]) is None
+
+
+def test_cleanup_container_removes_named_container(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+
+    monkeypatch.setattr(docker_runtime.subprocess, "run", fake_run)
+
+    docker_runtime.cleanup_container(None)
+    docker_runtime.cleanup_container("builder")
+
+    assert calls == [
+        (
+            ["docker", "rm", "-f", "builder"],
+            {
+                "check": False,
+                "stdout": docker_runtime.subprocess.DEVNULL,
+                "stderr": docker_runtime.subprocess.DEVNULL,
+            },
+        ),
+    ]
 
 
 def test_docker_run_command_merges_workspace_wide_mounts_and_env():
