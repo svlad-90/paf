@@ -2,6 +2,8 @@
 Docker runtime helpers for PAF tasks.
 '''
 
+from typing import Any
+
 from paf.paf_impl import CommunicationMode
 from paf.paf_impl import InteractionMode
 from paf.paf_impl import logger
@@ -62,8 +64,8 @@ def container_config(task, container_alias):
 
 
 def _merge_mounts(default_mounts, container_mounts):
-    result = []
-    by_target = {}
+    result: list[dict[str, Any]] = []
+    by_target: dict[str, int] = {}
 
     for mount in list(default_mounts or []) + list(container_mounts or []):
         mount = _require_mapping(mount, "docker.mounts")
